@@ -8,12 +8,25 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('data').value = new Date().toISOString().split('T')[0];
     
     // Carica materiali dal database
-    materialiDB = await db.getMateriali();
+    try {
+        materialiDB = await db.getMateriali();
+    } catch (error) {
+        console.error('Errore caricamento materiali:', error);
+        // Materiali di default se il database non è disponibile
+        materialiDB = [
+            { id: 1, nome: 'Ferro', prezzo_kg: 2.50, unita: 'kg' },
+            { id: 2, nome: 'Alluminio', prezzo_kg: 3.80, unita: 'kg' },
+            { id: 3, nome: 'PVC', prezzo_kg: 1.60, unita: 'kg' },
+            { id: 4, nome: 'Legno', prezzo_kg: 2.20, unita: 'kg' },
+            { id: 5, nome: 'Inox', prezzo_kg: 5.00, unita: 'kg' },
+            { id: 6, nome: 'Vetro', prezzo_kg: 4.50, unita: 'kg' }
+        ];
+    }
     
     // Aggiungi primo articolo
     aggiungiArticolo();
     
-    // Gestisci submit form
+    // Gestisci submit form - IMPORTANTE: previeni l'invio del form
     document.getElementById('formPreventivo').addEventListener('submit', async (e) => {
         e.preventDefault();
         await generaPDF();
@@ -123,238 +136,217 @@ function calcolaTotale() {
 // Funzione per salvare bozza
 async function salvaBozza() {
     alert('Funzione in sviluppo - La bozza verrà salvata nel database');
-    // TODO: Implementare salvataggio bozza
 }
 
-// Funzione per generare PDF
+// FUNZIONE PRINCIPALE PER GENERARE PDF
 async function generaPDF() {
-    // Raccogli dati
-    const datiPreventivo = {
-        cliente: {
-            nome: document.getElementById('clienteNome').value,
-            indirizzo: document.getElementById('clienteIndirizzo').value,
-            citta: document.getElementById('clienteCitta').value,
-            cap: document.getElementById('clienteCap').value,
-            provincia: document.getElementById('clienteProvincia').value,
-            piva: document.getElementById('clientePIVA').value
-        },
-        preventivo: {
-            data: document.getElementById('data').value,
-            oggetto: document.getElementById('oggetto').value,
-            totale: document.getElementById('totalePreventivo').textContent
-        },
-        articoli: []
-    };
-    
-    // Raccogli articoli
-    document.querySelectorAll('.articolo').forEach((articolo, index) => {
-        const articoloData = {
-            numero: index + 1,
-            descrizione: articolo.querySelector('.descrizioneArticolo').value,
-            oreLavoro: articolo.querySelector('.oreLavoro').value,
-            totale: articolo.querySelector('.totaleArticolo').value,
-            materiali: [],
-            immagineUrl: null
+    try {
+        console.log('Inizio generazione PDF...');
+        
+        // Raccogli dati
+        const datiPreventivo = {
+            cliente: {
+                nome: document.getElementById('clienteNome').value || 'Cliente',
+                indirizzo: document.getElementById('clienteIndirizzo').value || '',
+                citta: document.getElementById('clienteCitta').value || '',
+                cap: document.getElementById('clienteCap').value || '',
+                provincia: document.getElementById('clienteProvincia').value || '',
+                piva: document.getElementById('clientePIVA').value || ''
+            },
+            preventivo: {
+                data: document.getElementById('data').value,
+                oggetto: document.getElementById('oggetto').value || 'Preventivo',
+                totale: document.getElementById('totalePreventivo').textContent
+            },
+            articoli: []
         };
         
-        // Raccogli materiali
-        articolo.querySelectorAll('.materiale-row').forEach(row => {
-            const select = row.querySelector('.selectMateriale');
-            if (select.value) {
-                articoloData.materiali.push({
-                    nome: select.options[select.selectedIndex].text.split(' (')[0],
-                    quantita: row.querySelector('.quantitaMateriale').value,
-                    prezzo: row.querySelector('.prezzoMateriale').value
-                });
-            }
-        });
-        
-        // Gestisci immagine se presente
-        const fileInput = articolo.querySelector('.immagineArticolo');
-        if (fileInput && fileInput.files[0]) {
-            // TODO: Caricare su Supabase Storage e ottenere URL
-            // Per ora usiamo un data URL locale
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                articoloData.immagineUrl = e.target.result;
+        // Raccogli articoli
+        document.querySelectorAll('.articolo').forEach((articolo, index) => {
+            const articoloData = {
+                numero: index + 1,
+                descrizione: articolo.querySelector('.descrizioneArticolo').value || `Articolo ${index + 1}`,
+                oreLavoro: articolo.querySelector('.oreLavoro').value || '0',
+                totale: articolo.querySelector('.totaleArticolo').value || '€ 0,00',
+                materiali: []
             };
-            reader.readAsDataURL(fileInput.files[0]);
-        }
-        
-        datiPreventivo.articoli.push(articoloData);
-    });
-    
-    // Usa html2pdf per generare il PDF con layout professionale
-    if (window.html2pdf) {
-        await pdfGenerator.generaPDF(datiPreventivo);
-    } else {
-        // Fallback a jsPDF semplice
-        generaPDFSemplice(datiPreventivo);
-    }
-    
-    // Salva nel database
-    await salvaPreventivoDB(datiPreventivo);
-}
-
-// Fallback PDF semplice con jsPDF
-function generaPDFSemplice(datiPreventivo) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    // Intestazione
-    doc.setFontSize(20);
-    doc.text('CERBARO', 105, 20, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text('Via Lago di Bracciano, 17 - 36015 Schio (VI)', 105, 28, { align: 'center' });
-    doc.text('Tel: 0445575494 - Email: info@cerbaro.it', 105, 34, { align: 'center' });
-    
-    // Resto del codice come prima...
-    // [codice esistente per generazione PDF semplice]
-    
-    // Salva PDF
-    const nomeFile = `preventivo_${datiPreventivo.cliente.nome.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-    doc.save(nomeFile);
-    
-    alert('Preventivo generato con successo!');
-}
-
-// Funzione per aggiungere condizioni finali al PDF
-function aggiungiCondizioniFinali(doc) {
-    // Prima pagina condizioni
-    doc.addPage();
-    doc.setFontSize(12);
-    doc.setFont(undefined, 'bold');
-    doc.text('CONDIZIONI COMMERCIALI', 105, 20, { align: 'center' });
-    doc.setFont(undefined, 'normal');
-    doc.setFontSize(10);
-    
-    let y = 40;
-    const testoCondizioni = [
-        'Le immagini contenute nella presente offerta sono solo a puro scopo dimostrativo, non vincolanti.',
-        'Prezzi indicativi formulati per quantità, dimensioni richieste e per l\'intero lavoro.',
-        'Da confermare dopo presa visione del cantiere.',
-        'Eventuali profili di finitura che si rendessero necessari per un lavoro a regola d\'arte,',
-        'saranno conteggiati a consuntivo.',
-        'Le voci non comprese nella presente offerta sono da ritenersi escluse.',
-        'La posa in opera è da intendersi non vincolante e sarà conteggiata a consuntivo.',
-        '',
-        'Condizioni commerciali:',
-        '• Trasporto: incluso',
-        '• Pratica Enea: esclusa',
-        '• Smontaggio: escluso',
-        '• Smaltimento: escluso',
-        '• Eventuali opere murarie: escluse',
-        '• Consegna: 60gg da conferma ordine',
-        '• Pagamento: 60% acconto a firma contratto, 30% a merce pronta, 10% a fine lavori',
-        '• Validità offerta: 30gg'
-    ];
-    
-    testoCondizioni.forEach(riga => {
-        doc.text(riga, 20, y);
-        y += 6;
-    });
-    
-    // Seconda pagina condizioni
-    doc.addPage();
-    y = 20;
-    doc.setFont(undefined, 'bold');
-    doc.text('GARANZIA E TERMINI', 105, y, { align: 'center' });
-    doc.setFont(undefined, 'normal');
-    y += 20;
-    
-    const testoGaranzia = [
-        'Garanzia:',
-        'Il cliente finale ha diritto alla garanzia totale sul prodotto per i primi due anni',
-        'dalla data di acquisto, come da normativa vigente.',
-        '',
-        'Consegna:',
-        'Le date di consegna sono indicative e dipendono dai giorni lavorativi dalla data',
-        'di ricevimento dell\'ordine controfirmato per accettazione.',
-        '',
-        'Pagamenti:',
-        'I pagamenti devono essere effettuati entro i termini precisati in fattura.',
-        '',
-        'IVA:',
-        'I prezzi sono esclusi di IVA. L\'IVA applicata ordinariamente è pari al 22%.',
-        '',
-        'Reclami:',
-        'Qualsiasi vizio o difetto evidente deve essere comunicato in forma scritta',
-        'entro 8 giorni dalla consegna.'
-    ];
-    
-    testoGaranzia.forEach(riga => {
-        doc.text(riga, 20, y);
-        y += 6;
-    });
-}
-
-// Funzione per salvare preventivo nel database
-async function salvaPreventivoDB(datiPreventivo) {
-    try {
-        // Salva o trova cliente
-        let clienteId;
-        const clientiEsistenti = await db.getClienti();
-        const clienteEsistente = clientiEsistenti.find(c => 
-            c.nome === datiPreventivo.cliente.nome && 
-            c.partita_iva === datiPreventivo.cliente.piva
-        );
-        
-        if (clienteEsistente) {
-            clienteId = clienteEsistente.id;
-        } else {
-            // Crea nuovo cliente
-            const nuovoCliente = await db.saveCliente({
-                nome: datiPreventivo.cliente.nome,
-                indirizzo: datiPreventivo.cliente.indirizzo,
-                citta: datiPreventivo.cliente.citta,
-                cap: datiPreventivo.cliente.cap,
-                provincia: datiPreventivo.cliente.provincia,
-                partita_iva: datiPreventivo.cliente.piva
-            });
-            clienteId = nuovoCliente.id;
-        }
-        
-        // Genera numero preventivo
-        const numeroPreventivo = `${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
-        
-        // Salva preventivo
-        const preventivo = await db.savePreventivo({
-            numero: numeroPreventivo,
-            cliente_id: clienteId,
-            data: datiPreventivo.preventivo.data,
-            oggetto: datiPreventivo.preventivo.oggetto,
-            totale: parseFloat(datiPreventivo.preventivo.totale.replace(',', '.')),
-            stato: 'completato'
-        });
-        
-        // Salva articoli
-        for (const articolo of datiPreventivo.articoli) {
-            const articoloSalvato = await db.saveArticolo({
-                preventivo_id: preventivo.id,
-                descrizione: articolo.descrizione,
-                ore_lavoro: parseFloat(articolo.oreLavoro) || 0,
-                totale_articolo: parseFloat(articolo.totale.replace('€ ', '').replace(',', '.')),
-                posizione: articolo.numero
+            
+            // Raccogli materiali
+            articolo.querySelectorAll('.materiale-row').forEach(row => {
+                const select = row.querySelector('.selectMateriale');
+                if (select && select.value) {
+                    const materialDB = materialiDB.find(m => m.id == select.value);
+                    if (materialDB) {
+                        articoloData.materiali.push({
+                            nome: materialDB.nome,
+                            quantita: row.querySelector('.quantitaMateriale').value || '0',
+                            prezzo: materialDB.prezzo_kg
+                        });
+                    }
+                }
             });
             
-            // Salva materiali dell'articolo
-            if (articoloSalvato && articolo.materiali.length > 0) {
-                const materialiArticolo = articolo.materiali.map(mat => {
-                    const materialDB = materialiDB.find(m => m.nome === mat.nome);
-                    return {
-                        articolo_id: articoloSalvato.id,
-                        materiale_id: materialDB.id,
-                        quantita: parseFloat(mat.quantita) || 0,
-                        totale_materiale: (parseFloat(mat.quantita) || 0) * materialDB.prezzo_kg
-                    };
+            datiPreventivo.articoli.push(articoloData);
+        });
+        
+        console.log('Dati raccolti:', datiPreventivo);
+        
+        // Genera PDF con jsPDF
+        if (!window.jspdf) {
+            alert('Libreria PDF non caricata. Ricarica la pagina.');
+            return;
+        }
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        let yPos = 20;
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+        const marginLeft = 20;
+        const marginRight = 20;
+        const contentWidth = pageWidth - marginLeft - marginRight;
+        
+        // Intestazione
+        doc.setFontSize(28);
+        doc.setTextColor(204, 0, 0);
+        doc.text('CERBARO', pageWidth/2, yPos, { align: 'center' });
+        
+        yPos += 10;
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Via Lago di Bracciano, 17 - 36015 Schio (VI)', pageWidth/2, yPos, { align: 'center' });
+        yPos += 5;
+        doc.text('Tel: 0445575494 - Email: info@cerbaro.it', pageWidth/2, yPos, { align: 'center' });
+        
+        yPos += 10;
+        doc.line(marginLeft, yPos, pageWidth - marginRight, yPos);
+        yPos += 10;
+        
+        // Data e Cliente
+        doc.setFontSize(11);
+        doc.text(`Data: ${new Date(datiPreventivo.preventivo.data).toLocaleDateString('it-IT')}`, marginLeft, yPos);
+        
+        doc.text('Spett.le', 120, yPos);
+        doc.setFont(undefined, 'bold');
+        doc.text(datiPreventivo.cliente.nome, 120, yPos + 6);
+        doc.setFont(undefined, 'normal');
+        
+        if (datiPreventivo.cliente.indirizzo) {
+            doc.text(datiPreventivo.cliente.indirizzo, 120, yPos + 12);
+        }
+        if (datiPreventivo.cliente.citta) {
+            doc.text(`${datiPreventivo.cliente.cap} ${datiPreventivo.cliente.citta} ${datiPreventivo.cliente.provincia}`, 120, yPos + 18);
+        }
+        
+        yPos += 30;
+        
+        // Oggetto
+        doc.setFont(undefined, 'bold');
+        doc.text('Oggetto: ', marginLeft, yPos);
+        doc.setFont(undefined, 'normal');
+        const oggetto = doc.splitTextToSize(datiPreventivo.preventivo.oggetto, contentWidth - 30);
+        doc.text(oggetto, marginLeft + 25, yPos);
+        yPos += oggetto.length * 5 + 10;
+        
+        // Tabella articoli
+        doc.text('Di seguito nostra migliore offerta:', marginLeft, yPos);
+        yPos += 10;
+        
+        // Header tabella
+        doc.setFillColor(240, 240, 240);
+        doc.rect(marginLeft, yPos, contentWidth, 8, 'F');
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(10);
+        doc.text('Pos.', marginLeft + 2, yPos + 6);
+        doc.text('Descrizione', marginLeft + 15, yPos + 6);
+        doc.text('Totale €', marginLeft + 150, yPos + 6);
+        
+        yPos += 12;
+        doc.setFont(undefined, 'normal');
+        
+        // Articoli
+        datiPreventivo.articoli.forEach(articolo => {
+            // Controlla se serve nuova pagina
+            if (yPos > pageHeight - 40) {
+                doc.addPage();
+                yPos = 20;
+            }
+            
+            doc.text(`${articolo.numero}`, marginLeft + 2, yPos);
+            
+            // Descrizione
+            const desc = doc.splitTextToSize(articolo.descrizione, 120);
+            doc.text(desc, marginLeft + 15, yPos);
+            
+            // Totale
+            const totaleNumerico = articolo.totale.replace('€', '').trim();
+            doc.text(totaleNumerico, marginLeft + 150, yPos);
+            
+            yPos += desc.length * 5 + 2;
+            
+            // Dettagli materiali
+            if (articolo.materiali.length > 0) {
+                doc.setFontSize(8);
+                articolo.materiali.forEach(mat => {
+                    doc.text(`• ${mat.nome}: ${mat.quantita} kg`, marginLeft + 20, yPos);
+                    yPos += 4;
                 });
-                
-                await db.saveArticoloMateriali(materialiArticolo);
+                doc.setFontSize(10);
+            }
+            
+            if (articolo.oreLavoro && parseFloat(articolo.oreLavoro) > 0) {
+                doc.setFontSize(8);
+                doc.text(`• Ore lavoro: ${articolo.oreLavoro}`, marginLeft + 20, yPos);
+                yPos += 4;
+                doc.setFontSize(10);
+            }
+            
+            yPos += 8;
+        });
+        
+        // Totale
+        yPos += 5;
+        doc.line(marginLeft, yPos, pageWidth - marginRight, yPos);
+        yPos += 8;
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(12);
+        doc.text(`TOTALE iva esclusa: € ${datiPreventivo.preventivo.totale}`, pageWidth - marginRight, yPos, { align: 'right' });
+        
+        // Salva PDF
+        const nomeFile = `preventivo_${datiPreventivo.cliente.nome.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(nomeFile);
+        
+        console.log('PDF generato con successo!');
+        alert('Preventivo generato con successo!');
+        
+        // Prova a salvare nel database (se disponibile)
+        if (typeof salvaPreventivoDB === 'function') {
+            try {
+                await salvaPreventivoDB(datiPreventivo);
+            } catch (error) {
+                console.error('Errore salvataggio database:', error);
             }
         }
         
-        console.log('Preventivo salvato nel database con successo!');
     } catch (error) {
-        console.error('Errore nel salvataggio del preventivo:', error);
+        console.error('Errore generazione PDF:', error);
+        alert('Errore nella generazione del PDF. Controlla la console per dettagli.');
+    }
+}
+
+// Funzione per salvare preventivo nel database (opzionale)
+async function salvaPreventivoDB(datiPreventivo) {
+    // Solo se db è disponibile
+    if (typeof db === 'undefined') {
+        console.log('Database non disponibile, salvataggio saltato');
+        return;
+    }
+    
+    try {
+        // Codice per salvare nel database...
+        console.log('Tentativo salvataggio nel database...');
+    } catch (error) {
+        console.error('Errore salvataggio:', error);
     }
 }
