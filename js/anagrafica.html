@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anagrafica Clienti - Cerbaro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .cliente-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .cliente-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="index.html">
+                <i class="bi bi-house-door"></i> Cerbaro
+            </a>
+            <span class="navbar-text text-white">
+                Anagrafica Clienti
+            </span>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header con ricerca e pulsante nuovo -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="searchInput" 
+                           placeholder="Cerca per nome, città, P.IVA...">
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-success" onclick="mostraModalNuovoCliente()">
+                    <i class="bi bi-person-plus"></i> Nuovo Cliente
+                </button>
+                <button class="btn btn-secondary" onclick="window.location.href='index.html'">
+                    <i class="bi bi-arrow-left"></i> Indietro
+                </button>
+            </div>
+        </div>
+
+        <!-- Statistiche -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Totale Clienti</h5>
+                        <h2 id="totaleClienti">-</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Aziende</h5>
+                        <h2 id="totaleAziende">-</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Privati</h5>
+                        <h2 id="totalePrivati">-</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Ultimi 30gg</h5>
+                        <h2 id="nuoviClienti">-</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading spinner -->
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Caricamento...</span>
+            </div>
+            <p class="mt-3">Caricamento clienti...</p>
+        </div>
+
+        <!-- Lista clienti -->
+        <div class="row" id="listaClienti" style="display: none;">
+            <!-- I clienti verranno inseriti qui dinamicamente -->
+        </div>
+
+        <!-- Messaggio errore -->
+        <div id="errorMessage" class="alert alert-danger" style="display: none;"></div>
+    </div>
+
+    <!-- Modal Nuovo/Modifica Cliente -->
+    <div class="modal fade" id="modalCliente" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Nuovo Cliente</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formCliente">
+                        <input type="hidden" id="clienteId">
+                        
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="nome" class="form-label">Nome/Ragione Sociale *</label>
+                                    <input type="text" class="form-control" id="nome" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="tipo" class="form-label">Tipo</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="isAzienda" onchange="toggleCampiAzienda()">
+                                        <label class="form-check-label" for="isAzienda">
+                                            È un'azienda
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="indirizzo" class="form-label">Indirizzo</label>
+                                    <input type="text" class="form-control" id="indirizzo">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="cap" class="form-label">CAP</label>
+                                    <input type="text" class="form-control" id="cap" maxlength="10">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="citta" class="form-label">Città</label>
+                                    <input type="text" class="form-control" id="citta">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="provincia" class="form-label">Provincia</label>
+                                    <input type="text" class="form-control" id="provincia" maxlength="2">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="telefono" class="form-label">Telefono</label>
+                                    <input type="tel" class="form-control" id="telefono">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="email">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row" id="campiAzienda" style="display: none;">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="partita_iva" class="form-label">Partita IVA</label>
+                                    <input type="text" class="form-control" id="partita_iva" maxlength="20">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="codice_fiscale" class="form-label">Codice Fiscale</label>
+                                    <input type="text" class="form-control" id="codice_fiscale" maxlength="20">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-danger" id="btnElimina" onclick="eliminaCliente()" style="display: none;">
+                        <i class="bi bi-trash"></i> Elimina
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btnSalva" onclick="salvaCliente()">
+                        <i class="bi bi-check"></i> Salva
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Configurazione Supabase - SOSTITUISCI CON I TUOI DATI
+        const SUPABASE_URL = 'https://tuoprogetto.supabase.co';
+        const SUPABASE_ANON_KEY = 'tua-anon-key';
+        
+        // Inizializza Supabase
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let clientiDB = [];
+        let clienteCorrente = null;
+
+        // Carica clienti all'avvio
+        document.addEventListener('DOMContentLoaded', async function() {
+            await caricaClienti();
+        });
+
+        // Ricerca clienti
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredClienti = clientiDB.filter(cliente => {
+                const searchString = `${cliente.nome} ${cliente.citta || ''} ${cliente.partita_iva || ''} ${cliente.email || ''}`.toLowerCase();
+                return searchString.includes(searchTerm);
+            });
+            mostraClienti(filteredClienti);
+        });
+
+        // Carica lista clienti da Supabase
+        async function caricaClienti() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('listaClienti').style.display = 'none';
+                document.getElementById('errorMessage').style.display = 'none';
+                
+                const { data, error } = await supabaseClient
+                    .from('clienti')
+                    .select('*')
+                    .order('nome', { ascending: true });
+                
+                if (error) throw error;
+                
+                clientiDB = data || [];
+                mostraClienti(clientiDB);
+                aggiornaStatistiche();
+                
+            } catch (error) {
+                console.error('Errore nel caricamento clienti:', error);
+                document.getElementById('errorMessage').textContent = 'Errore nel caricamento dei clienti. Verifica la connessione.';
+                document.getElementById('errorMessage').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('listaClienti').style.display = 'flex';
+            }
+        }
+
+        // Mostra clienti nelle card
+        function mostraClienti(clienti) {
+            const container = document.getElementById('listaClienti');
+            container.innerHTML = '';
+            
+            if (clienti.length === 0) {
+                container.innerHTML = '<div class="col-12 text-center"><p class="text-muted">Nessun cliente trovato</p></div>';
+                return;
+            }
+            
+            clienti.forEach(cliente => {
+                const isAzienda = cliente.partita_iva ? true : false;
+                const card = `
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card cliente-card" onclick="mostraDettagliCliente(${cliente.id})">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-${isAzienda ? 'building' : 'person'}"></i>
+                                    ${cliente.nome}
+                                </h5>
+                                <p class="card-text mb-1">
+                                    <small class="text-muted">
+                                        <i class="bi bi-geo-alt"></i> ${cliente.citta || 'N/D'} ${cliente.provincia || ''}
+                                    </small>
+                                </p>
+                                ${cliente.telefono ? `<p class="card-text mb-1"><small><i class="bi bi-telephone"></i> ${cliente.telefono}</small></p>` : ''}
+                                ${cliente.email ? `<p class="card-text mb-1"><small><i class="bi bi-envelope"></i> ${cliente.email}</small></p>` : ''}
+                                ${cliente.partita_iva ? `<p class="card-text"><small><i class="bi bi-credit-card"></i> P.IVA: ${cliente.partita_iva}</small></p>` : ''}
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <small class="text-muted">
+                                    Aggiunto il ${new Date(cliente.created_at).toLocaleDateString('it-IT')}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', card);
+            });
+        }
+
+        // Aggiorna statistiche
+        function aggiornaStatistiche() {
+            document.getElementById('totaleClienti').textContent = clientiDB.length;
+            
+            const aziende = clientiDB.filter(c => c.partita_iva).length;
+            const privati = clientiDB.length - aziende;
+            
+            document.getElementById('totaleAziende').textContent = aziende;
+            document.getElementById('totalePrivati').textContent = privati;
+            
+            const oggi = new Date();
+            const trentaGiorniFa = new Date(oggi.getTime() - (30 * 24 * 60 * 60 * 1000));
+            const nuovi = clientiDB.filter(c => new Date(c.created_at) > trentaGiorniFa).length;
+            
+            document.getElementById('nuoviClienti').textContent = nuovi;
+        }
+
+        // Mostra modal nuovo cliente
+        function mostraModalNuovoCliente() {
+            clienteCorrente = null;
+            document.getElementById('modalTitle').textContent = 'Nuovo Cliente';
+            document.getElementById('formCliente').reset();
+            document.getElementById('clienteId').value = '';
+            document.getElementById('btnElimina').style.display = 'none';
+            document.getElementById('campiAzienda').style.display = 'none';
+            document.getElementById('isAzienda').checked = false;
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
+            modal.show();
+        }
+
+        // Mostra dettagli cliente
+        async function mostraDettagliCliente(id) {
+            clienteCorrente = clientiDB.find(c => c.id === id);
+            if (!clienteCorrente) return;
+            
+            document.getElementById('modalTitle').textContent = 'Modifica Cliente';
+            document.getElementById('clienteId').value = clienteCorrente.id;
+            document.getElementById('nome').value = clienteCorrente.nome || '';
+            document.getElementById('indirizzo').value = clienteCorrente.indirizzo || '';
+            document.getElementById('cap').value = clienteCorrente.cap || '';
+            document.getElementById('citta').value = clienteCorrente.citta || '';
+            document.getElementById('provincia').value = clienteCorrente.provincia || '';
+            document.getElementById('telefono').value = clienteCorrente.telefono || '';
+            document.getElementById('email').value = clienteCorrente.email || '';
+            document.getElementById('partita_iva').value = clienteCorrente.partita_iva || '';
+            document.getElementById('codice_fiscale').value = clienteCorrente.codice_fiscale || '';
+            
+            const isAzienda = clienteCorrente.partita_iva ? true : false;
+            document.getElementById('isAzienda').checked = isAzienda;
+            document.getElementById('campiAzienda').style.display = isAzienda ? 'flex' : 'none';
+            
+            document.getElementById('btnElimina').style.display = 'block';
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
+            modal.show();
+        }
+
+        // Toggle campi azienda
+        function toggleCampiAzienda() {
+            const isAzienda = document.getElementById('isAzienda').checked;
+            document.getElementById('campiAzienda').style.display = isAzienda ? 'flex' : 'none';
+            
+            if (!isAzienda) {
+                document.getElementById('partita_iva').value = '';
+                document.getElementById('codice_fiscale').value = '';
+            }
+        }
+
+        // Salva cliente
+        async function salvaCliente() {
+            const btnSalva = document.getElementById('btnSalva');
+            btnSalva.disabled = true;
+            btnSalva.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvataggio...';
+            
+            try {
+                const id = document.getElementById('clienteId').value;
+                const isAzienda = document.getElementById('isAzienda').checked;
+                
+                const clienteData = {
+                    nome: document.getElementById('nome').value.trim(),
+                    indirizzo: document.getElementById('indirizzo').value.trim() || null,
+                    cap: document.getElementById('cap').value.trim() || null,
+                    citta: document.getElementById('citta').value.trim() || null,
+                    provincia: document.getElementById('provincia').value.trim().toUpperCase() || null,
+                    telefono: document.getElementById('telefono').value.trim() || null,
+                    email: document.getElementById('email').value.trim() || null,
+                    partita_iva: isAzienda ? document.getElementById('partita_iva').value.trim() : null,
+                    codice_fiscale: isAzienda ? document.getElementById('codice_fiscale').value.trim() : null
+                };
+                
+                if (!clienteData.nome) {
+                    alert('Il nome è obbligatorio!');
+                    return;
+                }
+                
+                let result;
+                
+                if (id) {
+                    // Aggiorna cliente esistente
+                    result = await supabaseClient
+                        .from('clienti')
+                        .update(clienteData)
+                        .eq('id', id)
+                        .select();
+                } else {
+                    // Inserisci nuovo cliente
+                    result = await supabaseClient
+                        .from('clienti')
+                        .insert([clienteData])
+                        .select();
+                }
+                
+                if (result.error) throw result.error;
+                
+                // Chiudi modal e ricarica
+                bootstrap.Modal.getInstance(document.getElementById('modalCliente')).hide();
+                await caricaClienti();
+                
+                // Mostra notifica
+                alert(id ? 'Cliente modificato con successo!' : 'Cliente aggiunto con successo!');
+                
+            } catch (error) {
+                console.error('Errore nel salvataggio:', error);
+                alert('Errore nel salvataggio del cliente: ' + error.message);
+            } finally {
+                btnSalva.disabled = false;
+                btnSalva.innerHTML = '<i class="bi bi-check"></i> Salva';
+            }
+        }
+
+        // Elimina cliente
+        async function eliminaCliente() {
+            const id = document.getElementById('clienteId').value;
+            if (!id) return;
+            
+            if (!confirm('Sei sicuro di voler eliminare questo cliente? L\'operazione non può essere annullata.')) {
+                return;
+            }
+            
+            const btnElimina = document.getElementById('btnElimina');
+            btnElimina.disabled = true;
+            btnElimina.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Eliminazione...';
+            
+            try {
+                const { error } = await supabaseClient
+                    .from('clienti')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                bootstrap.Modal.getInstance(document.getElementById('modalCliente')).hide();
+                await caricaClienti();
+                
+                alert('Cliente eliminato con successo!');
+                
+            } catch (error) {
+                console.error('Errore nell\'eliminazione:', error);
+                alert('Errore nell\'eliminazione del cliente: ' + error.message);
+            } finally {
+                btnElimina.disabled = false;
+                btnElimina.innerHTML = '<i class="bi bi-trash"></i> Elimina';
+            }
+        }
+    </script>
+</body>
+</html>
