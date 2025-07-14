@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storico Preventivi - Cerbaro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .table-hover tbody tr:hover {
+            background-color: #f0f0f0;
+            cursor: pointer;
+        }
+        .stato-badge {
+            font-size: 0.875rem;
+            padding: 0.25rem 0.5rem;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+        .filter-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="index.html">
+                <i class="bi bi-house-door"></i> Cerbaro
+            </a>
+            <span class="navbar-text text-white">
+                Storico Preventivi
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Filtri di ricerca -->
+        <div class="filter-card">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="filtroCliente" class="form-label">Cliente</label>
+                    <input type="text" class="form-control" id="filtroCliente" 
+                           placeholder="Cerca per nome cliente...">
+                </div>
+                <div class="col-md-2">
+                    <label for="filtroNumero" class="form-label">N° Preventivo</label>
+                    <input type="text" class="form-control" id="filtroNumero" 
+                           placeholder="Es. 2025-001">
+                </div>
+                <div class="col-md-2">
+                    <label for="filtroDataDa" class="form-label">Data Da</label>
+                    <input type="date" class="form-control" id="filtroDataDa">
+                </div>
+                <div class="col-md-2">
+                    <label for="filtroDataA" class="form-label">Data A</label>
+                    <input type="date" class="form-control" id="filtroDataA">
+                </div>
+                <div class="col-md-2">
+                    <label for="filtroStato" class="form-label">Stato</label>
+                    <select class="form-select" id="filtroStato">
+                        <option value="">Tutti</option>
+                        <option value="bozza">Bozza</option>
+                        <option value="inviato">Inviato</option>
+                        <option value="accettato">Accettato</option>
+                        <option value="rifiutato">Rifiutato</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="applicaFiltri()">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistiche -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Totale Preventivi</h6>
+                        <h3 id="totalePreventivi">-</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Accettati</h6>
+                        <h3 id="preventiviAccettati">-</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">In Attesa</h6>
+                        <h3 id="preventiviAttesa">-</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Valore Totale</h6>
+                        <h3 id="valoreTotale">€ -</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pulsanti azione -->
+        <div class="mb-3">
+            <button class="btn btn-success" onclick="window.location.href='preventivo.html'">
+                <i class="bi bi-plus-circle"></i> Nuovo Preventivo
+            </button>
+            <button class="btn btn-secondary" onclick="window.location.href='index.html'">
+                <i class="bi bi-arrow-left"></i> Indietro
+            </button>
+            <button class="btn btn-info float-end" onclick="esportaExcel()">
+                <i class="bi bi-file-earmark-excel"></i> Esporta Excel
+            </button>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Caricamento...</span>
+            </div>
+            <p class="mt-3">Caricamento preventivi...</p>
+        </div>
+
+        <!-- Tabella preventivi -->
+        <div class="card" id="tabellaContainer" style="display: none;">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>N° Preventivo</th>
+                                <th>Data</th>
+                                <th>Cliente</th>
+                                <th>Oggetto</th>
+                                <th>Totale</th>
+                                <th>Stato</th>
+                                <th>Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabellaPreventivi">
+                            <!-- Preventivi verranno inseriti qui -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messaggio vuoto -->
+        <div id="messaggioVuoto" class="text-center mt-5" style="display: none;">
+            <i class="bi bi-inbox" style="font-size: 4rem; color: #ddd;"></i>
+            <p class="text-muted mt-3">Nessun preventivo trovato</p>
+            <button class="btn btn-primary" onclick="window.location.href='preventivo.html'">
+                Crea il primo preventivo
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Dettagli Preventivo -->
+    <div class="modal fade" id="modalDettagli" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Dettagli Preventivo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="dettagliPreventivo">
+                    <!-- Dettagli verranno inseriti qui -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                    <button type="button" class="btn btn-primary" id="btnGeneraPDF">
+                        <i class="bi bi-file-pdf"></i> Genera PDF
+                    </button>
+                    <button type="button" class="btn btn-info" id="btnDuplica">
+                        <i class="bi bi-copy"></i> Duplica
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Configurazione Supabase - SOSTITUISCI CON I TUOI DATI
+        const SUPABASE_URL = 'https://tuoprogetto.supabase.co';
+        const SUPABASE_ANON_KEY = 'tua-anon-key';
+        
+        // Inizializza Supabase
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let preventiviDB = [];
+        let preventiviFiltrati = [];
+        let preventivoCorrente = null;
+
+        // Carica preventivi all'avvio
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Imposta date filtri (ultimo mese)
+            const oggi = new Date();
+            const unMeseFa = new Date(oggi.getFullYear(), oggi.getMonth() - 1, oggi.getDate());
+            document.getElementById('filtroDataDa').value = unMeseFa.toISOString().split('T')[0];
+            document.getElementById('filtroDataA').value = oggi.toISOString().split('T')[0];
+            
+            await caricaPreventivi();
+        });
+
+        // Event listeners per filtri
+        ['filtroCliente', 'filtroNumero', 'filtroStato'].forEach(id => {
+            document.getElementById(id).addEventListener('input', applicaFiltri);
+        });
+        ['filtroDataDa', 'filtroDataA'].forEach(id => {
+            document.getElementById(id).addEventListener('change', applicaFiltri);
+        });
+
+        // Carica preventivi da Supabase
+        async function caricaPreventivi() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('tabellaContainer').style.display = 'none';
+                document.getElementById('messaggioVuoto').style.display = 'none';
+                
+                // Carica preventivi con join su clienti
+                const { data, error } = await supabaseClient
+                    .from('preventivi')
+                    .select(`
+                        *,
+                        clienti (
+                            nome,
+                            citta,
+                            partita_iva
+                        )
+                    `)
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                
+                preventiviDB = data || [];
+                
+                // Applica filtri iniziali
+                applicaFiltri();
+                aggiornaStatistiche();
+                
+            } catch (error) {
+                console.error('Errore nel caricamento preventivi:', error);
+                alert('Errore nel caricamento dei preventivi. Verifica la connessione.');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Applica filtri
+        function applicaFiltri() {
+            const filtroCliente = document.getElementById('filtroCliente').value.toLowerCase();
+            const filtroNumero = document.getElementById('filtroNumero').value.toLowerCase();
+            const filtroStato = document.getElementById('filtroStato').value;
+            const filtroDataDa = document.getElementById('filtroDataDa').value;
+            const filtroDataA = document.getElementById('filtroDataA').value;
+            
+            preventiviFiltrati = preventiviDB.filter(p => {
+                // Filtro cliente
+                if (filtroCliente && !p.clienti?.nome.toLowerCase().includes(filtroCliente)) {
+                    return false;
+                }
+                
+                // Filtro numero
+                if (filtroNumero && !p.numero.toLowerCase().includes(filtroNumero)) {
+                    return false;
+                }
+                
+                // Filtro stato
+                if (filtroStato && p.stato !== filtroStato) {
+                    return false;
+                }
+                
+                // Filtro date
+                const dataPreventivo = new Date(p.data);
+                if (filtroDataDa && dataPreventivo < new Date(filtroDataDa)) {
+                    return false;
+                }
+                if (filtroDataA && dataPreventivo > new Date(filtroDataA)) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            mostraPreventivi();
+        }
+
+        // Mostra preventivi in tabella
+        function mostraPreventivi() {
+            const tbody = document.getElementById('tabellaPreventivi');
+            tbody.innerHTML = '';
+            
+            if (preventiviFiltrati.length === 0) {
+                document.getElementById('tabellaContainer').style.display = 'none';
+                document.getElementById('messaggioVuoto').style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('tabellaContainer').style.display = 'block';
+            document.getElementById('messaggioVuoto').style.display = 'none';
+            
+            preventiviFiltrati.forEach(preventivo => {
+                const row = `
+                    <tr onclick="mostraDettagli(${preventivo.id})" style="cursor: pointer;">
+                        <td><strong>${preventivo.numero}</strong></td>
+                        <td>${new Date(preventivo.data).toLocaleDateString('it-IT')}</td>
+                        <td>
+                            ${preventivo.clienti?.nome || 'N/D'}
+                            ${preventivo.clienti?.citta ? `<br><small class="text-muted">${preventivo.clienti.citta}</small>` : ''}
+                        </td>
+                        <td>${preventivo.oggetto || 'N/D'}</td>
+                        <td class="text-end">€ ${(preventivo.totale || 0).toFixed(2)}</td>
+                        <td>${getStatoBadge(preventivo.stato)}</td>
+                        <td onclick="event.stopPropagation();">
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="generaPDF(${preventivo.id})" title="Genera PDF">
+                                    <i class="bi bi-file-pdf"></i>
+                                </button>
+                                <button class="btn btn-outline-info" onclick="duplicaPreventivo(${preventivo.id})" title="Duplica">
+                                    <i class="bi bi-copy"></i>
+                                </button>
+                                <button class="btn btn-outline-success" onclick="cambiaStato(${preventivo.id})" title="Cambia Stato">
+                                    <i class="bi bi-check-circle"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="eliminaPreventivo(${preventivo.id})" title="Elimina">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        // Badge stato
+        function getStatoBadge(stato) {
+            const badges = {
+                'bozza': '<span class="badge bg-secondary stato-badge">Bozza</span>',
+                'inviato': '<span class="badge bg-primary stato-badge">Inviato</span>',
+                'accettato': '<span class="badge bg-success stato-badge">Accettato</span>',
+                'rifiutato': '<span class="badge bg-danger stato-badge">Rifiutato</span>'
+            };
+            return badges[stato] || badges['bozza'];
+        }
+
+        // Aggiorna statistiche
+        function aggiornaStatistiche() {
+            document.getElementById('totalePreventivi').textContent = preventiviDB.length;
+            document.getElementById('preventiviAccettati').textContent = 
+                preventiviDB.filter(p => p.stato === 'accettato').length;
+            document.getElementById('preventiviAttesa').textContent = 
+                preventiviDB.filter(p => p.stato === 'inviato' || p.stato === 'bozza').length;
+            
+            const valoreTotale = preventiviDB
+                .filter(p => p.stato === 'accettato')
+                .reduce((sum, p) => sum + (p.totale || 0), 0);
+            document.getElementById('valoreTotale').textContent = `€ ${valoreTotale.toFixed(2)}`;
+        }
+
+        // Mostra dettagli preventivo
+        async function mostraDettagli(id) {
+            preventivoCorrente = preventiviDB.find(p => p.id === id);
+            if (!preventivoCorrente) return;
+            
+            try {
+                // Carica anche gli articoli del preventivo
+                const { data: articoli, error } = await supabaseClient
+                    .from('articoli_preventivo')
+                    .select(`
+                        *,
+                        articoli_materiali (
+                            *,
+                            materiali (nome, prezzo_kg)
+                        )
+                    `)
+                    .eq('preventivo_id', id)
+                    .order('posizione', { ascending: true });
+                
+                if (error) throw error;
+                
+                preventivoCorrente.articoli = articoli || [];
+                
+                // Costruisci HTML dettagli
+                const dettagliHtml = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Informazioni Preventivo</h6>
+                            <p><strong>Numero:</strong> ${preventivoCorrente.numero}</p>
+                            <p><strong>Data:</strong> ${new Date(preventivoCorrente.data).toLocaleDateString('it-IT')}</p>
+                            <p><strong>Stato:</strong> ${getStatoBadge(preventivoCorrente.stato)}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Cliente</h6>
+                            <p><strong>${preventivoCorrente.clienti?.nome || 'N/D'}</strong></p>
+                            ${preventivoCorrente.clienti?.citta ? `<p>${preventivoCorrente.clienti.citta}</p>` : ''}
+                            ${preventivoCorrente.clienti?.partita_iva ? `<p>P.IVA: ${preventivoCorrente.clienti.partita_iva}</p>` : ''}
+                        </div>
+                    </div>
+                    <hr>
+                    <h6>Oggetto</h6>
+                    <p>${preventivoCorrente.oggetto || 'N/D'}</p>
+                    ${preventivoCorrente.note ? `<p><em>${preventivoCorrente.note}</em></p>` : ''}
+                    <hr>
+                    <h6>Articoli</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Descrizione</th>
+                                    <th class="text-end">Ore</th>
+                                    <th class="text-end">Totale</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${preventivoCorrente.articoli.map(art => `
+                                    <tr>
+                                        <td>
+                                            ${art.descrizione}
+                                            ${art.articoli_materiali?.length > 0 ? `
+                                                <ul class="small text-muted mb-0">
+                                                    ${art.articoli_materiali.map(m => 
+                                                        `<li>${m.materiali?.nome}: ${m.quantita} kg</li>`
+                                                    ).join('')}
+                                                </ul>
+                                            ` : ''}
+                                        </td>
+                                        <td class="text-end">${art.ore_lavoro || 0}</td>
+                                        <td class="text-end">€ ${(art.totale_articolo || 0).toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="2">Totale</th>
+                                    <th class="text-end">€ ${(preventivoCorrente.totale || 0).toFixed(2)}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                `;
+                
+                document.getElementById('dettagliPreventivo').innerHTML = dettagliHtml;
+                
+                // Configura pulsanti
+                document.getElementById('btnGeneraPDF').onclick = () => generaPDF(id);
+                document.getElementById('btnDuplica').onclick = () => duplicaPreventivo(id);
+                
+                // Mostra modal
+                const modal = new bootstrap.Modal(document.getElementById('modalDettagli'));
+                modal.show();
+                
+            } catch (error) {
+                console.error('Errore nel caricamento dettagli:', error);
+                alert('Errore nel caricamento dei dettagli del preventivo.');
+            }
+        }
+
+        // Genera PDF (placeholder - implementare la logica completa)
+        async function generaPDF(id) {
+            alert('Funzione genera PDF da implementare completamente');
+            // TODO: Implementare generazione PDF con lo stesso formato di preventivo.html
+        }
+
+        // Duplica preventivo
+        async function duplicaPreventivo(id) {
+            if (!confirm('Vuoi duplicare questo preventivo?')) return;
+            
+            try {
+                const preventivo = preventiviDB.find(p => p.id === id);
+                if (!preventivo) return;
+                
+                // Crea copia del preventivo
+                const nuovoPreventivo = {
+                    cliente_id: preventivo.cliente_id,
+                    oggetto: preventivo.oggetto + ' (COPIA)',
+                    note: preventivo.note,
+                    totale: preventivo.totale,
+                    stato: 'bozza',
+                    data: new Date().toISOString().split('T')[0],
+                    numero: 'TEMP-' + Date.now() // Numero temporaneo
+                };
+                
+                // TODO: Implementare duplicazione completa con articoli
+                alert('Funzione duplica da completare');
+                
+            } catch (error) {
+                console.error('Errore nella duplicazione:', error);
+                alert('Errore nella duplicazione del preventivo.');
+            }
+        }
+
+        // Cambia stato preventivo
+        async function cambiaStato(id) {
+            const preventivo = preventiviDB.find(p => p.id === id);
+            if (!preventivo) return;
+            
+            const nuovoStato = prompt('Nuovo stato (bozza/inviato/accettato/rifiutato):', preventivo.stato);
+            if (!nuovoStato || !['bozza', 'inviato', 'accettato', 'rifiutato'].includes(nuovoStato)) return;
+            
+            try {
+                const { error } = await supabaseClient
+                    .from('preventivi')
+                    .update({ stato: nuovoStato })
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                await caricaPreventivi();
+                alert('Stato aggiornato con successo!');
+                
+            } catch (error) {
+                console.error('Errore nell\'aggiornamento stato:', error);
+                alert('Errore nell\'aggiornamento dello stato.');
+            }
+        }
+
+        // Elimina preventivo
+        async function eliminaPreventivo(id) {
+            if (!confirm('Sei sicuro di voler eliminare questo preventivo? L\'operazione non può essere annullata.')) return;
+            
+            try {
+                const { error } = await supabaseClient
+                    .from('preventivi')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                await caricaPreventivi();
+                alert('Preventivo eliminato con successo!');
+                
+            } catch (error) {
+                console.error('Errore nell\'eliminazione:', error);
+                alert('Errore nell\'eliminazione del preventivo.');
+            }
+        }
+
+        // Esporta Excel (placeholder)
+        function esportaExcel() {
+            alert('Funzione esporta Excel da implementare');
+            // TODO: Implementare export Excel con libreria tipo SheetJS
+        }
+    </script>
+</body>
+</html>
