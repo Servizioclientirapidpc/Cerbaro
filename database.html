@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Materiali - Cerbaro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .btn-edit {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+        .search-box {
+            position: relative;
+        }
+        .search-box i {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+        .search-box input {
+            padding-left: 35px;
+        }
+        .price-badge {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-weight: 500;
+        }
+        .code-badge {
+            background-color: #f3e5f5;
+            color: #7b1fa2;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="index.html">
+                <i class="bi bi-house-door"></i> Cerbaro
+            </a>
+            <span class="navbar-text text-white">
+                Database Materiali
+            </span>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header con statistiche -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Totale Materiali</h6>
+                        <h3 id="totaleMateriali">-</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Prezzo Medio</h6>
+                        <h3 id="prezzoMedio">€ -</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Prezzo Min</h6>
+                        <h3 id="prezzoMin">€ -</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Prezzo Max</h6>
+                        <h3 id="prezzoMax">€ -</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barra azioni -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="search-box">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control" id="searchInput" 
+                           placeholder="Cerca per codice o nome materiale...">
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <button class="btn btn-success" onclick="mostraModalNuovo()">
+                    <i class="bi bi-plus-circle"></i> Nuovo Materiale
+                </button>
+                <button class="btn btn-info" onclick="esportaCSV()">
+                    <i class="bi bi-file-earmark-csv"></i> Esporta CSV
+                </button>
+                <button class="btn btn-warning" onclick="mostraModalImporta()">
+                    <i class="bi bi-upload"></i> Importa
+                </button>
+                <button class="btn btn-secondary" onclick="window.location.href='index.html'">
+                    <i class="bi bi-arrow-left"></i> Indietro
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Caricamento...</span>
+            </div>
+            <p class="mt-3">Caricamento materiali...</p>
+        </div>
+
+        <!-- Tabella materiali -->
+        <div class="table-container" id="tabellaContainer" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">Codice</th>
+                            <th>Nome Materiale</th>
+                            <th style="width: 120px;">Prezzo/kg</th>
+                            <th style="width: 80px;">Unità</th>
+                            <th style="width: 150px;">Creato il</th>
+                            <th style="width: 120px;">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabellaMateriali">
+                        <!-- I materiali verranno inseriti qui -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Messaggio vuoto -->
+        <div id="messaggioVuoto" class="text-center mt-5" style="display: none;">
+            <i class="bi bi-database" style="font-size: 4rem; color: #ddd;"></i>
+            <p class="text-muted mt-3">Nessun materiale trovato</p>
+            <button class="btn btn-primary" onclick="mostraModalNuovo()">
+                Aggiungi il primo materiale
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Nuovo/Modifica Materiale -->
+    <div class="modal fade" id="modalMateriale" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Nuovo Materiale</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formMateriale">
+                        <input type="hidden" id="materialeId">
+                        
+                        <div class="mb-3">
+                            <label for="codice" class="form-label">Codice *</label>
+                            <input type="text" class="form-control" id="codice" required 
+                                   placeholder="Es. MP001" maxlength="10">
+                            <small class="text-muted">Codice univoco del materiale</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="nome" class="form-label">Nome Materiale *</label>
+                            <input type="text" class="form-control" id="nome" required 
+                                   placeholder="Es. Ferro">
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="prezzo_kg" class="form-label">Prezzo (€/kg) *</label>
+                                    <input type="number" class="form-control" id="prezzo_kg" 
+                                           required min="0" step="0.01" placeholder="0.00">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="unita" class="form-label">Unità</label>
+                                    <select class="form-select" id="unita">
+                                        <option value="kg">kg</option>
+                                        <option value="m">m</option>
+                                        <option value="m²">m²</option>
+                                        <option value="pz">pz</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-danger" id="btnElimina" onclick="eliminaMateriale()" style="display: none;">
+                        <i class="bi bi-trash"></i> Elimina
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btnSalva" onclick="salvaMateriale()">
+                        <i class="bi bi-check"></i> Salva
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Importa CSV -->
+    <div class="modal fade" id="modalImporta" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Importa Materiali da CSV</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Il file CSV deve avere le colonne:
+                        <br><strong>codice, nome, prezzo_kg, unita</strong>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="fileCSV" class="form-label">Seleziona file CSV</label>
+                        <input type="file" class="form-control" id="fileCSV" accept=".csv">
+                    </div>
+                    
+                    <div id="previewImport" style="display: none;">
+                        <h6>Anteprima dati:</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm" id="tabellaPreview">
+                                <thead>
+                                    <tr>
+                                        <th>Codice</th>
+                                        <th>Nome</th>
+                                        <th>Prezzo</th>
+                                        <th>Unità</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-primary" id="btnImporta" onclick="importaCSV()" disabled>
+                        <i class="bi bi-upload"></i> Importa
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Configurazione Supabase - SOSTITUISCI CON I TUOI DATI
+        const SUPABASE_URL = 'https://iexqedfjnmxvsmyezyxs.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlleHFlZGZqbm14dnNteWV6eXhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTQxMjgsImV4cCI6MjA2ODA3MDEyOH0.1h0IZfARzWVcw3N-NTzQdiBkWhfM7VLEaqrG51Iy2bw';
+        
+        // Inizializza Supabase
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let materialiDB = [];
+        let materialiFiltrati = [];
+        let materialeCorrente = null;
+        let datiImportazione = [];
+
+        // Carica materiali all'avvio
+        document.addEventListener('DOMContentLoaded', async function() {
+            await caricaMateriali();
+        });
+
+        // Event listener per ricerca
+        document.getElementById('searchInput').addEventListener('input', function() {
+            filtraMateriali(this.value);
+        });
+
+        // Event listener per file CSV
+        document.getElementById('fileCSV').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                leggiCSV(file);
+            }
+        });
+
+        // Carica materiali da Supabase
+        async function caricaMateriali() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('tabellaContainer').style.display = 'none';
+                document.getElementById('messaggioVuoto').style.display = 'none';
+                
+                const { data, error } = await supabaseClient
+                    .from('materiali')
+                    .select('*')
+                    .order('codice', { ascending: true });
+                
+                if (error) throw error;
+                
+                materialiDB = data || [];
+                materialiFiltrati = [...materialiDB];
+                
+                mostraMateriali();
+                aggiornaStatistiche();
+                
+            } catch (error) {
+                console.error('Errore nel caricamento materiali:', error);
+                alert('Errore nel caricamento dei materiali. Verifica la connessione.');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Filtra materiali
+        function filtraMateriali(searchTerm) {
+            const termine = searchTerm.toLowerCase();
+            
+            if (!termine) {
+                materialiFiltrati = [...materialiDB];
+            } else {
+                materialiFiltrati = materialiDB.filter(materiale => 
+                    materiale.codice.toLowerCase().includes(termine) ||
+                    materiale.nome.toLowerCase().includes(termine)
+                );
+            }
+            
+            mostraMateriali();
+        }
+
+        // Mostra materiali in tabella
+        function mostraMateriali() {
+            const tbody = document.getElementById('tabellaMateriali');
+            tbody.innerHTML = '';
+            
+            if (materialiFiltrati.length === 0) {
+                document.getElementById('tabellaContainer').style.display = 'none';
+                document.getElementById('messaggioVuoto').style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('tabellaContainer').style.display = 'block';
+            document.getElementById('messaggioVuoto').style.display = 'none';
+            
+            materialiFiltrati.forEach(materiale => {
+                const row = `
+                    <tr>
+                        <td><span class="code-badge">${materiale.codice}</span></td>
+                        <td><strong>${materiale.nome}</strong></td>
+                        <td><span class="price-badge">€ ${materiale.prezzo_kg.toFixed(2)}</span></td>
+                        <td>${materiale.unita || 'kg'}</td>
+                        <td><small class="text-muted">${new Date(materiale.created_at).toLocaleDateString('it-IT')}</small></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary btn-edit" 
+                                    onclick="mostraModifica(${materiale.id})" title="Modifica">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger btn-edit" 
+                                    onclick="eliminaMaterialeRapido(${materiale.id})" title="Elimina">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        // Aggiorna statistiche
+        function aggiornaStatistiche() {
+            document.getElementById('totaleMateriali').textContent = materialiDB.length;
+            
+            if (materialiDB.length > 0) {
+                const prezzi = materialiDB.map(m => m.prezzo_kg);
+                const somma = prezzi.reduce((a, b) => a + b, 0);
+                const media = somma / prezzi.length;
+                const min = Math.min(...prezzi);
+                const max = Math.max(...prezzi);
+                
+                document.getElementById('prezzoMedio').textContent = `€ ${media.toFixed(2)}`;
+                document.getElementById('prezzoMin').textContent = `€ ${min.toFixed(2)}`;
+                document.getElementById('prezzoMax').textContent = `€ ${max.toFixed(2)}`;
+            } else {
+                document.getElementById('prezzoMedio').textContent = '€ 0.00';
+                document.getElementById('prezzoMin').textContent = '€ 0.00';
+                document.getElementById('prezzoMax').textContent = '€ 0.00';
+            }
+        }
+
+        // Mostra modal nuovo materiale
+        function mostraModalNuovo() {
+            materialeCorrente = null;
+            document.getElementById('modalTitle').textContent = 'Nuovo Materiale';
+            document.getElementById('formMateriale').reset();
+            document.getElementById('materialeId').value = '';
+            document.getElementById('btnElimina').style.display = 'none';
+            document.getElementById('unita').value = 'kg';
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalMateriale'));
+            modal.show();
+        }
+
+        // Mostra modifica materiale
+        function mostraModifica(id) {
+            materialeCorrente = materialiDB.find(m => m.id === id);
+            if (!materialeCorrente) return;
+            
+            document.getElementById('modalTitle').textContent = 'Modifica Materiale';
+            document.getElementById('materialeId').value = materialeCorrente.id;
+            document.getElementById('codice').value = materialeCorrente.codice;
+            document.getElementById('nome').value = materialeCorrente.nome;
+            document.getElementById('prezzo_kg').value = materialeCorrente.prezzo_kg;
+            document.getElementById('unita').value = materialeCorrente.unita || 'kg';
+            
+            document.getElementById('btnElimina').style.display = 'block';
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalMateriale'));
+            modal.show();
+        }
+
+        // Salva materiale
+        async function salvaMateriale() {
+            const btnSalva = document.getElementById('btnSalva');
+            btnSalva.disabled = true;
+            btnSalva.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvataggio...';
+            
+            try {
+                const id = document.getElementById('materialeId').value;
+                
+                const materialeData = {
+                    codice: document.getElementById('codice').value.trim().toUpperCase(),
+                    nome: document.getElementById('nome').value.trim(),
+                    prezzo_kg: parseFloat(document.getElementById('prezzo_kg').value),
+                    unita: document.getElementById('unita').value
+                };
+                
+                // Validazione
+                if (!materialeData.codice || !materialeData.nome || materialeData.prezzo_kg <= 0) {
+                    alert('Compila tutti i campi obbligatori!');
+                    return;
+                }
+                
+                // Verifica codice univoco
+                const codiceEsistente = materialiDB.find(m => 
+                    m.codice === materialeData.codice && m.id != id
+                );
+                if (codiceEsistente) {
+                    alert('Il codice materiale esiste già!');
+                    return;
+                }
+                
+                let result;
+                
+                if (id) {
+                    // Aggiorna materiale esistente
+                    result = await supabaseClient
+                        .from('materiali')
+                        .update(materialeData)
+                        .eq('id', id)
+                        .select();
+                } else {
+                    // Inserisci nuovo materiale
+                    result = await supabaseClient
+                        .from('materiali')
+                        .insert([materialeData])
+                        .select();
+                }
+                
+                if (result.error) throw result.error;
+                
+                // Chiudi modal e ricarica
+                bootstrap.Modal.getInstance(document.getElementById('modalMateriale')).hide();
+                await caricaMateriali();
+                
+                // Mostra notifica
+                alert(id ? 'Materiale modificato con successo!' : 'Materiale aggiunto con successo!');
+                
+            } catch (error) {
+                console.error('Errore nel salvataggio:', error);
+                alert('Errore nel salvataggio del materiale: ' + error.message);
+            } finally {
+                btnSalva.disabled = false;
+                btnSalva.innerHTML = '<i class="bi bi-check"></i> Salva';
+            }
+        }
+
+        // Elimina materiale (dal modal)
+        async function eliminaMateriale() {
+            const id = document.getElementById('materialeId').value;
+            if (!id) return;
+            
+            if (!confirm('Sei sicuro di voler eliminare questo materiale? L\'operazione non può essere annullata.')) {
+                return;
+            }
+            
+            await eseguiEliminazione(id);
+            bootstrap.Modal.getInstance(document.getElementById('modalMateriale')).hide();
+        }
+
+        // Elimina materiale rapido (dalla tabella)
+        async function eliminaMaterialeRapido(id) {
+            const materiale = materialiDB.find(m => m.id === id);
+            if (!materiale) return;
+            
+            if (!confirm(`Eliminare il materiale "${materiale.nome}" (${materiale.codice})?`)) {
+                return;
+            }
+            
+            await eseguiEliminazione(id);
+        }
+
+        // Esegui eliminazione
+        async function eseguiEliminazione(id) {
+            try {
+                const { error } = await supabaseClient
+                    .from('materiali')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                await caricaMateriali();
+                alert('Materiale eliminato con successo!');
+                
+            } catch (error) {
+                console.error('Errore nell\'eliminazione:', error);
+                if (error.message.includes('foreign key')) {
+                    alert('Impossibile eliminare il materiale perché è utilizzato in alcuni preventivi!');
+                } else {
+                    alert('Errore nell\'eliminazione del materiale: ' + error.message);
+                }
+            }
+        }
+
+        // Esporta CSV
+        function esportaCSV() {
+            let csv = 'codice,nome,prezzo_kg,unita\n';
+            
+            materialiDB.forEach(materiale => {
+                csv += `"${materiale.codice}","${materiale.nome}",${materiale.prezzo_kg},"${materiale.unita || 'kg'}"\n`;
+            });
+            
+            // Crea e scarica il file
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `materiali_cerbaro_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Mostra modal importa
+        function mostraModalImporta() {
+            document.getElementById('fileCSV').value = '';
+            document.getElementById('previewImport').style.display = 'none';
+            document.getElementById('btnImporta').disabled = true;
+            datiImportazione = [];
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalImporta'));
+            modal.show();
+        }
+
+        // Leggi file CSV
+        function leggiCSV(file) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n').filter(line => line.trim());
+                
+                if (lines.length < 2) {
+                    alert('Il file CSV è vuoto o non valido!');
+                    return;
+                }
+                
+                // Parse CSV
+                const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+                
+                // Verifica headers
+                const requiredHeaders = ['codice', 'nome', 'prezzo_kg'];
+                const hasRequiredHeaders = requiredHeaders.every(h => headers.includes(h));
+                
+                if (!hasRequiredHeaders) {
+                    alert('Il file CSV deve contenere le colonne: codice, nome, prezzo_kg');
+                    return;
+                }
+                
+                // Parse dati
+                datiImportazione = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g);
+                    if (!values) continue;
+                    
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        let value = values[index] || '';
+                        value = value.replace(/^"|"$/g, '').trim();
+                        row[header] = value;
+                    });
+                    
+                    // Validazione base
+                    if (row.codice && row.nome && row.prezzo_kg) {
+                        datiImportazione.push({
+                            codice: row.codice.toUpperCase(),
+                            nome: row.nome,
+                            prezzo_kg: parseFloat(row.prezzo_kg) || 0,
+                            unita: row.unita || 'kg'
+                        });
+                    }
+                }
+                
+                // Mostra preview
+                mostraPreviewImport();
+            };
+            
+            reader.readAsText(file);
+        }
+
+        // Mostra preview importazione
+        function mostraPreviewImport() {
+            if (datiImportazione.length === 0) {
+                alert('Nessun dato valido trovato nel file!');
+                return;
+            }
+            
+            const tbody = document.querySelector('#tabellaPreview tbody');
+            tbody.innerHTML = '';
+            
+            // Mostra max 5 righe di preview
+            const preview = datiImportazione.slice(0, 5);
+            preview.forEach(materiale => {
+                const row = `
+                    <tr>
+                        <td>${materiale.codice}</td>
+                        <td>${materiale.nome}</td>
+                        <td>€ ${materiale.prezzo_kg.toFixed(2)}</td>
+                        <td>${materiale.unita}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+            
+            if (datiImportazione.length > 5) {
+                tbody.insertAdjacentHTML('beforeend', 
+                    `<tr><td colspan="4" class="text-center text-muted">... e altri ${datiImportazione.length - 5} materiali</td></tr>`
+                );
+            }
+            
+            document.getElementById('previewImport').style.display = 'block';
+            document.getElementById('btnImporta').disabled = false;
+        }
+
+        // Importa CSV
+        async function importaCSV() {
+            if (datiImportazione.length === 0) return;
+            
+            const btnImporta = document.getElementById('btnImporta');
+            btnImporta.disabled = true;
+            btnImporta.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importazione...';
+            
+            try {
+                // Filtra solo i nuovi materiali (codice non esistente)
+                const codiciEsistenti = materialiDB.map(m => m.codice);
+                const nuoviMateriali = datiImportazione.filter(m => 
+                    !codiciEsistenti.includes(m.codice)
+                );
+                
+                if (nuoviMateriali.length === 0) {
+                    alert('Tutti i materiali nel file esistono già!');
+                    return;
+                }
+                
+                // Importa in batch
+                const { data, error } = await supabaseClient
+                    .from('materiali')
+                    .insert(nuoviMateriali)
+                    .select();
+                
+                if (error) throw error;
+                
+                // Chiudi modal e ricarica
+                bootstrap.Modal.getInstance(document.getElementById('modalImporta')).hide();
+                await caricaMateriali();
+                
+                const materialiAggiornati = datiImportazione.length - nuoviMateriali.length;
+                alert(`Importazione completata!\n- ${nuoviMateriali.length} materiali aggiunti\n- ${materialiAggiornati} materiali ignorati (già esistenti)`);
+                
+            } catch (error) {
+                console.error('Errore nell\'importazione:', error);
+                alert('Errore nell\'importazione: ' + error.message);
+            } finally {
+                btnImporta.disabled = false;
+                btnImporta.innerHTML = '<i class="bi bi-upload"></i> Importa';
+            }
+        }
+    </script>
+</body>
+</html>
