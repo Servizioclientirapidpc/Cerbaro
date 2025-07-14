@@ -6,6 +6,7 @@
     <title>Crea Preventivo - Cerbaro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Arial:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body {
@@ -25,6 +26,29 @@
             border-radius: 8px;
             background-color: white;
         }
+        .cliente-select-container {
+            position: relative;
+        }
+        .cliente-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        .cliente-suggestion {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .cliente-suggestion:hover {
+            background-color: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -32,12 +56,49 @@
         <h1 class="text-center mb-4">Crea Preventivo</h1>
         
         <form id="formPreventivo">
+            <!-- Numero Preventivo -->
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Numero Preventivo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="numeroPreventivo" class="form-label">Numero Preventivo</label>
+                                <input type="text" class="form-control" id="numeroPreventivo" readonly>
+                                <small class="text-muted">Generato automaticamente</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="dataPreventivo" class="form-label">Data</label>
+                                <input type="date" class="form-control" id="dataPreventivo" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Dati Cliente -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">Dati Cliente</h5>
                 </div>
                 <div class="card-body">
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="cercaCliente" 
+                                   placeholder="Cerca cliente esistente o inserisci nuovo nome...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="apriAnagrafica()">
+                                <i class="bi bi-person-plus"></i> Nuovo
+                            </button>
+                        </div>
+                        <div class="cliente-suggestions" id="clienteSuggestions"></div>
+                    </div>
+                    
+                    <input type="hidden" id="clienteId">
+                    
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -72,6 +133,20 @@
                             </div>
                         </div>
                     </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="partitaIvaCliente" class="form-label">P.IVA</label>
+                                <input type="text" class="form-control" id="partitaIvaCliente">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="codiceFiscaleCliente" class="form-label">Codice Fiscale</label>
+                                <input type="text" class="form-control" id="codiceFiscaleCliente">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -81,19 +156,14 @@
                     <h5 class="mb-0">Dati Preventivo</h5>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="dataPreventivo" class="form-label">Data</label>
-                                <input type="date" class="form-control" id="dataPreventivo" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="oggettoPreventivo" class="form-label">Oggetto *</label>
-                                <input type="text" class="form-control" id="oggettoPreventivo" required>
-                            </div>
-                        </div>
+                    <div class="mb-3">
+                        <label for="oggettoPreventivo" class="form-label">Oggetto *</label>
+                        <input type="text" class="form-control" id="oggettoPreventivo" required 
+                               placeholder="Es. Fornitura e posa serramenti">
+                    </div>
+                    <div class="mb-3">
+                        <label for="notePreventivo" class="form-label">Note</label>
+                        <textarea class="form-control" id="notePreventivo" rows="2"></textarea>
                     </div>
                 </div>
             </div>
@@ -109,12 +179,15 @@
                 <div class="card-body" id="articoliContainer">
                     <!-- Gli articoli verranno aggiunti qui -->
                 </div>
+                <div class="card-footer">
+                    <h4 class="text-end">Totale: € <span id="totaleGenerale">0.00</span></h4>
+                </div>
             </div>
 
             <!-- Pulsanti -->
             <div class="text-center mb-5">
                 <button type="button" class="btn btn-primary btn-lg me-2" onclick="generaPDF()">
-                    Genera PDF
+                    <i class="bi bi-file-pdf"></i> Genera PDF e Salva
                 </button>
                 <button type="button" class="btn btn-secondary btn-lg" onclick="window.location.href='index.html'">
                     Annulla
@@ -123,27 +196,200 @@
         </form>
     </div>
 
-    <script>
-        // Materiali disponibili (hardcoded per ora)
-        const materialiDB = [
-            { id: 1, codice: 'MP001', nome: 'Ferro', prezzo_kg: 2.50 },
-            { id: 2, codice: 'MP002', nome: 'Alluminio', prezzo_kg: 3.80 },
-            { id: 3, codice: 'MP003', nome: 'PVC', prezzo_kg: 1.60 },
-            { id: 4, codice: 'MP004', nome: 'Legno', prezzo_kg: 2.20 },
-            { id: 5, codice: 'MP005', nome: 'Inox', prezzo_kg: 5.00 },
-            { id: 6, codice: 'MP006', nome: 'Vetro', prezzo_kg: 4.50 }
-        ];
+    <!-- Modal di caricamento -->
+    <div class="modal fade" id="loadingModal" data-bs-backdrop="static" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center p-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Caricamento...</span>
+                    </div>
+                    <p id="loadingMessage">Generazione preventivo in corso...</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Configurazione Supabase - SOSTITUISCI CON I TUOI DATI
+        const SUPABASE_URL = 'https://iexqedfjnmxvsmyezyxs.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlleHFlZGZqbm14dnNteWV6eXhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTQxMjgsImV4cCI6MjA2ODA3MDEyOH0.1h0IZfARzWVcw3N-NTzQdiBkWhfM7VLEaqrG51Iy2bw';
+        
+        // Inizializza Supabase
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Variabili globali
+        let materialiDB = [];
+        let clientiDB = [];
         let numeroArticolo = 0;
         const costoOrario = 30;
 
         // Inizializzazione
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             // Imposta data odierna
             document.getElementById('dataPreventivo').value = new Date().toISOString().split('T')[0];
+            
+            // Carica dati da Supabase
+            await caricaMateriali();
+            await caricaClienti();
+            await generaNumeroPreventivo();
+            
             // Aggiungi primo articolo
             aggiungiArticolo();
+            
+            // Setup ricerca cliente
+            setupRicercaCliente();
         });
+
+        // Carica materiali da Supabase
+        async function caricaMateriali() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('materiali')
+                    .select('*')
+                    .order('nome');
+                
+                if (error) throw error;
+                materialiDB = data || [];
+                
+                // Se non ci sono materiali, usa quelli di default
+                if (materialiDB.length === 0) {
+                    materialiDB = [
+                        { id: 1, codice: 'MP001', nome: 'Ferro', prezzo_kg: 2.50 },
+                        { id: 2, codice: 'MP002', nome: 'Alluminio', prezzo_kg: 3.80 },
+                        { id: 3, codice: 'MP003', nome: 'PVC', prezzo_kg: 1.60 },
+                        { id: 4, codice: 'MP004', nome: 'Legno', prezzo_kg: 2.20 },
+                        { id: 5, codice: 'MP005', nome: 'Inox', prezzo_kg: 5.00 },
+                        { id: 6, codice: 'MP006', nome: 'Vetro', prezzo_kg: 4.50 }
+                    ];
+                }
+            } catch (error) {
+                console.error('Errore caricamento materiali:', error);
+                // Usa materiali di default in caso di errore
+                materialiDB = [
+                    { id: 1, codice: 'MP001', nome: 'Ferro', prezzo_kg: 2.50 },
+                    { id: 2, codice: 'MP002', nome: 'Alluminio', prezzo_kg: 3.80 },
+                    { id: 3, codice: 'MP003', nome: 'PVC', prezzo_kg: 1.60 },
+                    { id: 4, codice: 'MP004', nome: 'Legno', prezzo_kg: 2.20 },
+                    { id: 5, codice: 'MP005', nome: 'Inox', prezzo_kg: 5.00 },
+                    { id: 6, codice: 'MP006', nome: 'Vetro', prezzo_kg: 4.50 }
+                ];
+            }
+        }
+
+        // Carica clienti da Supabase
+        async function caricaClienti() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('clienti')
+                    .select('*')
+                    .order('nome');
+                
+                if (error) throw error;
+                clientiDB = data || [];
+            } catch (error) {
+                console.error('Errore caricamento clienti:', error);
+                clientiDB = [];
+            }
+        }
+
+        // Genera numero preventivo progressivo
+        async function generaNumeroPreventivo() {
+            try {
+                const anno = new Date().getFullYear();
+                
+                // Cerca l'ultimo preventivo dell'anno
+                const { data, error } = await supabaseClient
+                    .from('preventivi')
+                    .select('numero')
+                    .like('numero', `${anno}-%`)
+                    .order('numero', { ascending: false })
+                    .limit(1);
+                
+                if (error) throw error;
+                
+                let numeroProgressivo = 1;
+                if (data && data.length > 0) {
+                    const ultimoNumero = data[0].numero;
+                    const parti = ultimoNumero.split('-');
+                    if (parti.length > 1) {
+                        numeroProgressivo = parseInt(parti[1]) + 1;
+                    }
+                }
+                
+                const nuovoNumero = `${anno}-${numeroProgressivo.toString().padStart(3, '0')}`;
+                document.getElementById('numeroPreventivo').value = nuovoNumero;
+                
+            } catch (error) {
+                console.error('Errore generazione numero:', error);
+                // Fallback con timestamp
+                document.getElementById('numeroPreventivo').value = `${new Date().getFullYear()}-${Date.now()}`;
+            }
+        }
+
+        // Setup ricerca cliente
+        function setupRicercaCliente() {
+            const input = document.getElementById('cercaCliente');
+            const suggestions = document.getElementById('clienteSuggestions');
+            
+            input.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                
+                if (searchTerm.length < 2) {
+                    suggestions.style.display = 'none';
+                    return;
+                }
+                
+                const clientiFiltrati = clientiDB.filter(cliente => 
+                    cliente.nome.toLowerCase().includes(searchTerm) ||
+                    (cliente.citta && cliente.citta.toLowerCase().includes(searchTerm))
+                );
+                
+                if (clientiFiltrati.length > 0) {
+                    suggestions.innerHTML = clientiFiltrati.map(cliente => `
+                        <div class="cliente-suggestion" onclick="selezionaCliente(${cliente.id})">
+                            <strong>${cliente.nome}</strong>
+                            ${cliente.citta ? `<br><small class="text-muted">${cliente.citta}</small>` : ''}
+                        </div>
+                    `).join('');
+                    suggestions.style.display = 'block';
+                } else {
+                    suggestions.style.display = 'none';
+                }
+            });
+            
+            // Chiudi suggerimenti quando si clicca fuori
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+                    suggestions.style.display = 'none';
+                }
+            });
+        }
+
+        // Seleziona cliente
+        function selezionaCliente(id) {
+            const cliente = clientiDB.find(c => c.id === id);
+            if (!cliente) return;
+            
+            document.getElementById('clienteId').value = cliente.id;
+            document.getElementById('nomeCliente').value = cliente.nome;
+            document.getElementById('indirizzoCliente').value = cliente.indirizzo || '';
+            document.getElementById('cittaCliente').value = cliente.citta || '';
+            document.getElementById('capCliente').value = cliente.cap || '';
+            document.getElementById('provinciaCliente').value = cliente.provincia || '';
+            document.getElementById('partitaIvaCliente').value = cliente.partita_iva || '';
+            document.getElementById('codiceFiscaleCliente').value = cliente.codice_fiscale || '';
+            
+            document.getElementById('cercaCliente').value = cliente.nome;
+            document.getElementById('clienteSuggestions').style.display = 'none';
+        }
+
+        // Apri anagrafica in nuova scheda
+        function apriAnagrafica() {
+            window.open('anagrafica.html', '_blank');
+        }
 
         // Funzione per aggiungere articolo
         function aggiungiArticolo() {
@@ -161,7 +407,8 @@
                     
                     <div class="mb-3">
                         <label class="form-label">Descrizione</label>
-                        <input type="text" class="form-control" id="descrizione_${numeroArticolo}" required>
+                        <input type="text" class="form-control" id="descrizione_${numeroArticolo}" 
+                               onchange="calcolaTotaleGenerale()" required>
                     </div>
                     
                     <div class="mb-3">
@@ -194,6 +441,7 @@
             const articolo = document.getElementById(`articolo_${id}`);
             if (articolo && document.querySelectorAll('.articolo-section').length > 1) {
                 articolo.remove();
+                calcolaTotaleGenerale();
             }
         }
 
@@ -253,275 +501,111 @@
             });
             
             document.getElementById(`totale_${articoloId}`).textContent = totale.toFixed(2);
+            calcolaTotaleGenerale();
         }
 
-        // Funzione per generare PDF
+        // Calcola totale generale
+        function calcolaTotaleGenerale() {
+            let totaleGenerale = 0;
+            
+            document.querySelectorAll('.articolo-section').forEach(articolo => {
+                const id = articolo.id.split('_')[1];
+                const totaleArticolo = parseFloat(document.getElementById(`totale_${id}`).textContent) || 0;
+                totaleGenerale += totaleArticolo;
+            });
+            
+            document.getElementById('totaleGenerale').textContent = totaleGenerale.toFixed(2);
+        }
+
+        // Funzione per generare PDF e salvare preventivo
         async function generaPDF() {
             try {
-                console.log('Inizio generazione PDF...');
+                // Mostra modal di caricamento
+                const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+                loadingModal.show();
                 
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
+                console.log('Inizio generazione PDF e salvataggio...');
                 
                 // Raccogli dati
-                const datiPreventivo = raccogliDatiPreventivo();
+                const datiPreventivo = await raccogliDatiPreventivo();
                 console.log('Dati raccolti:', datiPreventivo);
                 
-                // Variabili per posizionamento
-                let yPos = 20;
-                const pageHeight = doc.internal.pageSize.height;
-                const pageWidth = doc.internal.pageSize.width;
+                // Salva preventivo in Supabase
+                document.getElementById('loadingMessage').textContent = 'Salvataggio preventivo...';
+                const preventivoId = await salvaPreventivo(datiPreventivo);
                 
-                // Funzione per aggiungere watermark
-                function aggiungiWatermark() {
-                    doc.setTextColor(240, 240, 240);
-                    doc.setFontSize(60);
-                    doc.text('CERBARO', pageWidth/2, pageHeight/2, {
-                        align: 'center',
-                        angle: 45
-                    });
-                    doc.setTextColor(0, 0, 0);
+                if (!preventivoId) {
+                    throw new Error('Errore nel salvataggio del preventivo');
                 }
                 
-                // Prima pagina - Preventivo
-                aggiungiWatermark();
+                // Genera PDF
+                document.getElementById('loadingMessage').textContent = 'Generazione PDF...';
+                await generaPDFCompleto(datiPreventivo);
                 
-                // Header
-                doc.setFontSize(24);
-                doc.setTextColor(255, 0, 0);
-                doc.text('CERBARO', pageWidth/2, yPos, { align: 'center' });
-                doc.setTextColor(0, 0, 0);
+                // Chiudi modal
+                loadingModal.hide();
                 
-                yPos += 10;
-                doc.setFontSize(10);
-                doc.text('Via Lago di Bracciano, 17 - 36015 Schio (VI)', pageWidth/2, yPos, { align: 'center' });
-                yPos += 5;
-                doc.text('Tel: 0445575494 - Email: info@cerbaro.it', pageWidth/2, yPos, { align: 'center' });
-                
-                // Linea divisoria
-                yPos += 10;
-                doc.line(20, yPos, pageWidth - 20, yPos);
-                
-                // Data e cliente
-                yPos += 15;
-                doc.setFontSize(11);
-                doc.text(`Data: ${datiPreventivo.data}`, 20, yPos);
-                doc.text('Spett.le', pageWidth - 60, yPos);
-                
-                yPos += 8;
-                doc.setFont(undefined, 'bold');
-                doc.text(datiPreventivo.cliente.nome, pageWidth - 60, yPos);
-                doc.setFont(undefined, 'normal');
-                
-                if (datiPreventivo.cliente.indirizzo) {
-                    yPos += 6;
-                    doc.text(datiPreventivo.cliente.indirizzo, pageWidth - 60, yPos);
+                // Conferma e redirect
+                if (confirm('Preventivo salvato e PDF generato con successo! Vuoi crearne un altro?')) {
+                    window.location.reload();
+                } else {
+                    window.location.href = 'storico.html';
                 }
-                
-                if (datiPreventivo.cliente.citta) {
-                    yPos += 6;
-                    doc.text(`${datiPreventivo.cliente.cap || ''} ${datiPreventivo.cliente.citta} ${datiPreventivo.cliente.provincia || ''}`.trim(), pageWidth - 60, yPos);
-                }
-                
-                // Oggetto
-                yPos += 20;
-                doc.setFont(undefined, 'bold');
-                doc.text('Oggetto:', 20, yPos);
-                doc.setFont(undefined, 'normal');
-                doc.text(datiPreventivo.oggetto, 45, yPos);
-                
-                yPos += 15;
-                doc.text('Di seguito nostra migliore offerta:', 20, yPos);
-                
-                // Tabella articoli
-                yPos += 15;
-                
-                // Header tabella
-                doc.setFillColor(240, 240, 240);
-                doc.rect(20, yPos - 5, pageWidth - 40, 8, 'F');
-                doc.setFont(undefined, 'bold');
-                doc.text('Pos.', 25, yPos);
-                doc.text('Descrizione', 40, yPos);
-                doc.text('Totale €', pageWidth - 40, yPos, { align: 'right' });
-                doc.setFont(undefined, 'normal');
-                
-                yPos += 10;
-                
-                // Articoli
-                let totalePreventivo = 0;
-                datiPreventivo.articoli.forEach((articolo, index) => {
-                    // Controllo nuova pagina
-                    if (yPos > pageHeight - 50) {
-                        doc.addPage();
-                        aggiungiWatermark();
-                        yPos = 30;
-                    }
-                    
-                    // Posizione e descrizione
-                    doc.text(`${index + 1}`, 25, yPos);
-                    doc.setFont(undefined, 'bold');
-                    doc.text(articolo.descrizione || `Articolo ${index + 1}`, 40, yPos);
-                    doc.text(articolo.totale.toFixed(2), pageWidth - 40, yPos, { align: 'right' });
-                    doc.setFont(undefined, 'normal');
-                    
-                    yPos += 6;
-                    
-                    // Dettagli materiali
-                    articolo.materiali.forEach(mat => {
-                        if (mat.quantita > 0) {
-                            doc.setFontSize(9);
-                            doc.text(`• ${mat.nome}: ${mat.quantita} kg`, 45, yPos);
-                            yPos += 5;
-                        }
-                    });
-                    
-                    // Ore lavoro
-                    if (articolo.ore > 0) {
-                        doc.setFontSize(9);
-                        doc.text(`• Ore lavoro: ${articolo.ore}`, 45, yPos);
-                        yPos += 5;
-                    }
-                    
-                    doc.setFontSize(11);
-                    yPos += 5;
-                    totalePreventivo += articolo.totale;
-                });
-                
-                // Linea totale
-                yPos += 5;
-                doc.line(20, yPos, pageWidth - 20, yPos);
-                yPos += 10;
-                
-                // Totale
-                doc.setFont(undefined, 'bold');
-                doc.setFontSize(14);
-                doc.text(`TOTALE iva esclusa: € ${totalePreventivo.toFixed(2)}`, pageWidth - 20, yPos, { align: 'right' });
-                
-                // Footer prima pagina
-                const footerY = pageHeight - 20;
-                doc.setFontSize(8);
-                doc.setFont(undefined, 'normal');
-                doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
-                doc.text('CERBARO CERBARO MATTEO GIOVANNI', pageWidth/2, footerY, { align: 'center' });
-                doc.text('Via Lago di Bracciano n. 17 - 36015 Schio (VI) - P.IVA: 03641800241', pageWidth/2, footerY + 4, { align: 'center' });
-                doc.text('Pagina 1 di 3', pageWidth - 20, footerY + 8, { align: 'right' });
-                
-                // Seconda pagina - Condizioni commerciali 1
-                doc.addPage();
-                aggiungiWatermark();
-                
-                yPos = 30;
-                doc.setFontSize(16);
-                doc.setFont(undefined, 'bold');
-                doc.text('CONDIZIONI COMMERCIALI', pageWidth/2, yPos, { align: 'center' });
-                
-                yPos += 20;
-                doc.setFontSize(11);
-                doc.setFont(undefined, 'normal');
-                
-                const condizioni1 = [
-                    { titolo: 'PAGAMENTO', testo: 'Bonifico bancario 30 gg data fattura fine mese.' },
-                    { titolo: 'CONSEGNA', testo: 'Da concordare - Franco nostro stabilimento.' },
-                    { titolo: 'TRASPORTO', testo: 'A carico del committente.' },
-                    { titolo: 'VALIDITÀ OFFERTA', testo: '30 giorni dalla data del presente preventivo.' },
-                    { titolo: 'GARANZIA', testo: '24 mesi dalla data di consegna su difetti di fabbricazione.' },
-                    { titolo: 'IMBALLO', testo: 'Compreso nel prezzo.' }
-                ];
-                
-                condizioni1.forEach(cond => {
-                    if (yPos > pageHeight - 40) {
-                        doc.addPage();
-                        aggiungiWatermark();
-                        yPos = 30;
-                    }
-                    
-                    doc.setFont(undefined, 'bold');
-                    doc.text(cond.titolo + ':', 20, yPos);
-                    yPos += 6;
-                    doc.setFont(undefined, 'normal');
-                    
-                    // Gestione testo lungo
-                    const lines = doc.splitTextToSize(cond.testo, pageWidth - 60);
-                    lines.forEach(line => {
-                        doc.text(line, 30, yPos);
-                        yPos += 6;
-                    });
-                    yPos += 4;
-                });
-                
-                // Footer seconda pagina
-                doc.setFontSize(8);
-                doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
-                doc.text('CERBARO CERBARO MATTEO GIOVANNI', pageWidth/2, footerY, { align: 'center' });
-                doc.text('Via Lago di Bracciano n. 17 - 36015 Schio (VI) - P.IVA: 03641800241', pageWidth/2, footerY + 4, { align: 'center' });
-                doc.text('Pagina 2 di 3', pageWidth - 20, footerY + 8, { align: 'right' });
-                
-                // Terza pagina - Condizioni commerciali 2
-                doc.addPage();
-                aggiungiWatermark();
-                
-                yPos = 30;
-                doc.setFontSize(12);
-                doc.setFont(undefined, 'bold');
-                doc.text('NOTE IMPORTANTI', 20, yPos);
-                
-                yPos += 15;
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'normal');
-                
-                const note = [
-                    '• I prezzi si intendono IVA esclusa',
-                    '• Il materiale resta di nostra proprietà fino al completo pagamento',
-                    '• Per accettazione del presente preventivo, restituire copia firmata',
-                    '• Eventuali variazioni in corso d\'opera saranno concordate separatamente',
-                    '• Il presente preventivo è stato redatto sulla base delle informazioni fornite',
-                    '• Misure e quantità da verificare in cantiere prima dell\'ordine definitivo'
-                ];
-                
-                note.forEach(nota => {
-                    doc.text(nota, 25, yPos);
-                    yPos += 8;
-                });
-                
-                // Spazio per firma
-                yPos = pageHeight - 80;
-                doc.text('Per accettazione:', 20, yPos);
-                yPos += 20;
-                doc.text('Data: _____________________', 20, yPos);
-                doc.text('Firma: _____________________', pageWidth/2, yPos);
-                
-                // Footer terza pagina
-                doc.setFontSize(8);
-                doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
-                doc.text('CERBARO CERBARO MATTEO GIOVANNI', pageWidth/2, footerY, { align: 'center' });
-                doc.text('Via Lago di Bracciano n. 17 - 36015 Schio (VI) - P.IVA: 03641800241', pageWidth/2, footerY + 4, { align: 'center' });
-                doc.text('Pagina 3 di 3', pageWidth - 20, footerY + 8, { align: 'right' });
-                
-                // Salva PDF
-                const nomeFile = `Preventivo_${datiPreventivo.cliente.nome.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`;
-                doc.save(nomeFile);
-                
-                console.log('PDF generato con successo!');
-                alert('PDF generato con successo!');
                 
             } catch (error) {
-                console.error('Errore nella generazione del PDF:', error);
-                alert('Si è verificato un errore nella generazione del PDF. Controlla la console per dettagli.');
+                console.error('Errore:', error);
+                document.getElementById('loadingModal').querySelector('.modal-body').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Errore: ${error.message}
+                    </div>
+                    <button class="btn btn-secondary" onclick="location.reload()">Riprova</button>
+                `;
             }
         }
-        
-        // Funzione per raccogliere dati del preventivo
-        function raccogliDatiPreventivo() {
+
+        // Raccogli dati preventivo
+        async function raccogliDatiPreventivo() {
+            // Gestione cliente
+            let clienteId = document.getElementById('clienteId').value;
+            const nomeCliente = document.getElementById('nomeCliente').value;
+            
+            // Se non c'è un cliente selezionato ma c'è un nome, crea nuovo cliente
+            if (!clienteId && nomeCliente) {
+                const nuovoCliente = {
+                    nome: nomeCliente,
+                    indirizzo: document.getElementById('indirizzoCliente').value || null,
+                    citta: document.getElementById('cittaCliente').value || null,
+                    cap: document.getElementById('capCliente').value || null,
+                    provincia: document.getElementById('provinciaCliente').value || null,
+                    partita_iva: document.getElementById('partitaIvaCliente').value || null,
+                    codice_fiscale: document.getElementById('codiceFiscaleCliente').value || null
+                };
+                
+                const { data, error } = await supabaseClient
+                    .from('clienti')
+                    .insert([nuovoCliente])
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                clienteId = data.id;
+            }
+            
             const dati = {
-                data: new Date(document.getElementById('dataPreventivo').value).toLocaleDateString('it-IT'),
+                numero: document.getElementById('numeroPreventivo').value,
+                data: document.getElementById('dataPreventivo').value,
+                cliente_id: clienteId,
                 cliente: {
                     nome: document.getElementById('nomeCliente').value || 'Cliente',
                     indirizzo: document.getElementById('indirizzoCliente').value || '',
                     citta: document.getElementById('cittaCliente').value || '',
                     cap: document.getElementById('capCliente').value || '',
-                    provincia: document.getElementById('provinciaCliente').value || ''
+                    provincia: document.getElementById('provinciaCliente').value || '',
+                    partita_iva: document.getElementById('partitaIvaCliente').value || '',
+                    codice_fiscale: document.getElementById('codiceFiscaleCliente').value || ''
                 },
                 oggetto: document.getElementById('oggettoPreventivo').value || 'Preventivo',
+                note: document.getElementById('notePreventivo').value || '',
                 articoli: []
             };
             
@@ -529,10 +613,11 @@
             document.querySelectorAll('.articolo-section').forEach((articoloEl, index) => {
                 const id = articoloEl.id.split('_')[1];
                 const articolo = {
+                    posizione: index + 1,
                     descrizione: document.getElementById(`descrizione_${id}`)?.value || `Articolo ${index + 1}`,
-                    ore: parseFloat(document.getElementById(`ore_${id}`)?.value) || 0,
+                    ore_lavoro: parseFloat(document.getElementById(`ore_${id}`)?.value) || 0,
                     materiali: [],
-                    totale: 0
+                    totale_articolo: 0
                 };
                 
                 // Raccogli materiali
@@ -548,23 +633,333 @@
                             const materiale = materialiDB.find(m => m.id === materialeId);
                             if (materiale) {
                                 articolo.materiali.push({
+                                    materiale_id: materialeId,
                                     nome: materiale.nome,
                                     quantita: quantita,
-                                    prezzo_unitario: materiale.prezzo_kg
+                                    prezzo_unitario: materiale.prezzo_kg,
+                                    totale_materiale: materiale.prezzo_kg * quantita
                                 });
-                                articolo.totale += materiale.prezzo_kg * quantita;
+                                articolo.totale_articolo += materiale.prezzo_kg * quantita;
                             }
                         }
                     });
                 }
                 
                 // Aggiungi costo ore lavoro
-                articolo.totale += articolo.ore * costoOrario;
+                articolo.totale_articolo += articolo.ore_lavoro * costoOrario;
                 
                 dati.articoli.push(articolo);
             });
             
+            // Calcola totale preventivo
+            dati.totale = dati.articoli.reduce((sum, art) => sum + art.totale_articolo, 0);
+            
             return dati;
+        }
+
+        // Salva preventivo in Supabase
+        async function salvaPreventivo(datiPreventivo) {
+            try {
+                // 1. Salva il preventivo principale
+                const preventivoData = {
+                    numero: datiPreventivo.numero,
+                    cliente_id: datiPreventivo.cliente_id,
+                    data: datiPreventivo.data,
+                    oggetto: datiPreventivo.oggetto,
+                    note: datiPreventivo.note,
+                    totale: datiPreventivo.totale,
+                    stato: 'bozza'
+                };
+                
+                const { data: preventivo, error: errorPreventivo } = await supabaseClient
+                    .from('preventivi')
+                    .insert([preventivoData])
+                    .select()
+                    .single();
+                
+                if (errorPreventivo) throw errorPreventivo;
+                
+                // 2. Salva gli articoli
+                for (const articolo of datiPreventivo.articoli) {
+                    const articoloData = {
+                        preventivo_id: preventivo.id,
+                        descrizione: articolo.descrizione,
+                        ore_lavoro: articolo.ore_lavoro,
+                        totale_articolo: articolo.totale_articolo,
+                        posizione: articolo.posizione
+                    };
+                    
+                    const { data: articoloSalvato, error: errorArticolo } = await supabaseClient
+                        .from('articoli_preventivo')
+                        .insert([articoloData])
+                        .select()
+                        .single();
+                    
+                    if (errorArticolo) throw errorArticolo;
+                    
+                    // 3. Salva i materiali dell'articolo
+                    if (articolo.materiali.length > 0) {
+                        const materialiData = articolo.materiali.map(mat => ({
+                            articolo_id: articoloSalvato.id,
+                            materiale_id: mat.materiale_id,
+                            quantita: mat.quantita,
+                            totale_materiale: mat.totale_materiale
+                        }));
+                        
+                        const { error: errorMateriali } = await supabaseClient
+                            .from('articoli_materiali')
+                            .insert(materialiData);
+                        
+                        if (errorMateriali) throw errorMateriali;
+                    }
+                }
+                
+                return preventivo.id;
+                
+            } catch (error) {
+                console.error('Errore nel salvataggio:', error);
+                throw error;
+            }
+        }
+
+        // Genera PDF completo
+        async function generaPDFCompleto(datiPreventivo) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Variabili per posizionamento
+            let yPos = 20;
+            const pageHeight = doc.internal.pageSize.height;
+            const pageWidth = doc.internal.pageSize.width;
+            
+            // Funzione per aggiungere watermark
+            function aggiungiWatermark() {
+                doc.setTextColor(240, 240, 240);
+                doc.setFontSize(60);
+                doc.text('CERBARO', pageWidth/2, pageHeight/2, {
+                    align: 'center',
+                    angle: 45
+                });
+                doc.setTextColor(0, 0, 0);
+            }
+            
+            // Prima pagina - Preventivo
+            aggiungiWatermark();
+            
+            // Header
+            doc.setFontSize(24);
+            doc.setTextColor(255, 0, 0);
+            doc.text('CERBARO', pageWidth/2, yPos, { align: 'center' });
+            doc.setTextColor(0, 0, 0);
+            
+            yPos += 10;
+            doc.setFontSize(10);
+            doc.text('Via Lago di Bracciano, 17 - 36015 Schio (VI)', pageWidth/2, yPos, { align: 'center' });
+            yPos += 5;
+            doc.text('Tel: 0445575494 - Email: info@cerbaro.it', pageWidth/2, yPos, { align: 'center' });
+            
+            // Linea divisoria
+            yPos += 10;
+            doc.line(20, yPos, pageWidth - 20, yPos);
+            
+            // Data e cliente
+            yPos += 15;
+            doc.setFontSize(11);
+            doc.text(`Data: ${new Date(datiPreventivo.data).toLocaleDateString('it-IT')}`, 20, yPos);
+            doc.text('Spett.le', pageWidth - 60, yPos);
+            
+            yPos += 8;
+            doc.setFont(undefined, 'bold');
+            doc.text(datiPreventivo.cliente.nome, pageWidth - 60, yPos);
+            doc.setFont(undefined, 'normal');
+            
+            if (datiPreventivo.cliente.indirizzo) {
+                yPos += 6;
+                doc.text(datiPreventivo.cliente.indirizzo, pageWidth - 60, yPos);
+            }
+            
+            if (datiPreventivo.cliente.citta) {
+                yPos += 6;
+                doc.text(`${datiPreventivo.cliente.cap || ''} ${datiPreventivo.cliente.citta} ${datiPreventivo.cliente.provincia || ''}`.trim(), pageWidth - 60, yPos);
+            }
+            
+            // Oggetto
+            yPos += 20;
+            doc.setFont(undefined, 'bold');
+            doc.text('Oggetto:', 20, yPos);
+            doc.setFont(undefined, 'normal');
+            doc.text(datiPreventivo.oggetto, 45, yPos);
+            
+            yPos += 15;
+            doc.text('Di seguito nostra migliore offerta:', 20, yPos);
+            
+            // Tabella articoli
+            yPos += 15;
+            
+            // Header tabella
+            doc.setFillColor(240, 240, 240);
+            doc.rect(20, yPos - 5, pageWidth - 40, 8, 'F');
+            doc.setFont(undefined, 'bold');
+            doc.text('Pos.', 25, yPos);
+            doc.text('Descrizione', 40, yPos);
+            doc.text('Totale €', pageWidth - 40, yPos, { align: 'right' });
+            doc.setFont(undefined, 'normal');
+            
+            yPos += 10;
+            
+            // Articoli
+            let totalePreventivo = 0;
+            datiPreventivo.articoli.forEach((articolo, index) => {
+                // Controllo nuova pagina
+                if (yPos > pageHeight - 50) {
+                    doc.addPage();
+                    aggiungiWatermark();
+                    yPos = 30;
+                }
+                
+                // Posizione e descrizione
+                doc.text(`${index + 1}`, 25, yPos);
+                doc.setFont(undefined, 'bold');
+                doc.text(articolo.descrizione || `Articolo ${index + 1}`, 40, yPos);
+                doc.text(articolo.totale_articolo.toFixed(2), pageWidth - 40, yPos, { align: 'right' });
+                doc.setFont(undefined, 'normal');
+                
+                yPos += 6;
+                
+                // Dettagli materiali
+                articolo.materiali.forEach(mat => {
+                    if (mat.quantita > 0) {
+                        doc.setFontSize(9);
+                        doc.text(`• ${mat.nome}: ${mat.quantita} kg`, 45, yPos);
+                        yPos += 5;
+                    }
+                });
+                
+                // Ore lavoro
+                if (articolo.ore_lavoro > 0) {
+                    doc.setFontSize(9);
+                    doc.text(`• Ore lavoro: ${articolo.ore_lavoro}`, 45, yPos);
+                    yPos += 5;
+                }
+                
+                doc.setFontSize(11);
+                yPos += 5;
+                totalePreventivo += articolo.totale_articolo;
+            });
+            
+            // Linea totale
+            yPos += 5;
+            doc.line(20, yPos, pageWidth - 20, yPos);
+            yPos += 10;
+            
+            // Totale
+            doc.setFont(undefined, 'bold');
+            doc.setFontSize(14);
+            doc.text(`TOTALE iva esclusa: € ${totalePreventivo.toFixed(2)}`, pageWidth - 20, yPos, { align: 'right' });
+            
+            // Footer prima pagina
+            const footerY = pageHeight - 20;
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'normal');
+            doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
+            doc.text('CERBARO CERBARO MATTEO GIOVANNI', pageWidth/2, footerY, { align: 'center' });
+            doc.text('Via Lago di Bracciano n. 17 - 36015 Schio (VI) - P.IVA: 03641800241', pageWidth/2, footerY + 4, { align: 'center' });
+            doc.text('Pagina 1 di 3', pageWidth - 20, footerY + 8, { align: 'right' });
+            
+            // Seconda pagina - Condizioni commerciali 1
+            doc.addPage();
+            aggiungiWatermark();
+            
+            yPos = 30;
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text('CONDIZIONI COMMERCIALI', pageWidth/2, yPos, { align: 'center' });
+            
+            yPos += 20;
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'normal');
+            
+            const condizioni1 = [
+                { titolo: 'PAGAMENTO', testo: 'Bonifico bancario 30 gg data fattura fine mese.' },
+                { titolo: 'CONSEGNA', testo: 'Da concordare - Franco nostro stabilimento.' },
+                { titolo: 'TRASPORTO', testo: 'A carico del committente.' },
+                { titolo: 'VALIDITÀ OFFERTA', testo: '30 giorni dalla data del presente preventivo.' },
+                { titolo: 'GARANZIA', testo: '24 mesi dalla data di consegna su difetti di fabbricazione.' },
+                { titolo: 'IMBALLO', testo: 'Compreso nel prezzo.' }
+            ];
+            
+            condizioni1.forEach(cond => {
+                if (yPos > pageHeight - 40) {
+                    doc.addPage();
+                    aggiungiWatermark();
+                    yPos = 30;
+                }
+                
+                doc.setFont(undefined, 'bold');
+                doc.text(cond.titolo + ':', 20, yPos);
+                yPos += 6;
+                doc.setFont(undefined, 'normal');
+                
+                // Gestione testo lungo
+                const lines = doc.splitTextToSize(cond.testo, pageWidth - 60);
+                lines.forEach(line => {
+                    doc.text(line, 30, yPos);
+                    yPos += 6;
+                });
+                yPos += 4;
+            });
+            
+            // Footer seconda pagina
+            doc.setFontSize(8);
+            doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
+            doc.text('CERBARO CERBARO MATTEO GIOVANNI', pageWidth/2, footerY, { align: 'center' });
+            doc.text('Via Lago di Bracciano n. 17 - 36015 Schio (VI) - P.IVA: 03641800241', pageWidth/2, footerY + 4, { align: 'center' });
+            doc.text('Pagina 2 di 3', pageWidth - 20, footerY + 8, { align: 'right' });
+            
+            // Terza pagina - Condizioni commerciali 2
+            doc.addPage();
+            aggiungiWatermark();
+            
+            yPos = 30;
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('NOTE IMPORTANTI', 20, yPos);
+            
+            yPos += 15;
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'normal');
+            
+            const note = [
+                '• I prezzi si intendono IVA esclusa',
+                '• Il materiale resta di nostra proprietà fino al completo pagamento',
+                '• Per accettazione del presente preventivo, restituire copia firmata',
+                '• Eventuali variazioni in corso d\'opera saranno concordate separatamente',
+                '• Il presente preventivo è stato redatto sulla base delle informazioni fornite',
+                '• Misure e quantità da verificare in cantiere prima dell\'ordine definitivo'
+            ];
+            
+            note.forEach(nota => {
+                doc.text(nota, 25, yPos);
+                yPos += 8;
+            });
+            
+            // Spazio per firma
+            yPos = pageHeight - 80;
+            doc.text('Per accettazione:', 20, yPos);
+            yPos += 20;
+            doc.text('Data: _____________________', 20, yPos);
+            doc.text('Firma: _____________________', pageWidth/2, yPos);
+            
+            // Footer terza pagina
+            doc.setFontSize(8);
+            doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
+            doc.text('CERBARO CERBARO MATTEO GIOVANNI', pageWidth/2, footerY, { align: 'center' });
+            doc.text('Via Lago di Bracciano n. 17 - 36015 Schio (VI) - P.IVA: 03641800241', pageWidth/2, footerY + 4, { align: 'center' });
+            doc.text('Pagina 3 di 3', pageWidth - 20, footerY + 8, { align: 'right' });
+            
+            // Salva PDF
+            const nomeFile = `Preventivo_${datiPreventivo.numero}_${datiPreventivo.cliente.nome.replace(/\s+/g, '_')}.pdf`;
+            doc.save(nomeFile);
         }
     </script>
 </body>
