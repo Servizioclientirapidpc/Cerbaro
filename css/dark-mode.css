@@ -1,0 +1,223 @@
+/* dark-mode.css - Dark Mode automatica basata su sistema */
+
+/* Variabili CSS per colori light mode (default) */
+:root {
+    --bg-primary: #f8f9fa;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --border-color: #dee2e6;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --input-bg: #ffffff;
+    --hover-bg: #f0f0f0;
+    --navbar-bg: #0d6efd;
+    --table-hover: #f5f5f5;
+}
+
+/* Dark mode - si attiva automaticamente quando il sistema è in dark mode */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --bg-card: #2d2d2d;
+        --text-primary: #e9ecef;
+        --text-secondary: #adb5bd;
+        --border-color: #495057;
+        --shadow-color: rgba(0, 0, 0, 0.5);
+        --input-bg: #2d2d2d;
+        --hover-bg: #3d3d3d;
+        --navbar-bg: #0a58ca;
+        --table-hover: #3d3d3d;
+    }
+    
+    /* Bootstrap overrides per dark mode */
+    body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* Cards */
+    .card {
+        background-color: var(--bg-card) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    .card-header {
+        border-color: var(--border-color) !important;
+    }
+    
+    /* Modals */
+    .modal-content {
+        background-color: var(--bg-card) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    .modal-header {
+        border-color: var(--border-color) !important;
+    }
+    
+    .modal-footer {
+        border-color: var(--border-color) !important;
+    }
+    
+    /* Forms */
+    .form-control,
+    .form-select {
+        background-color: var(--input-bg) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    .form-control:focus,
+    .form-select:focus {
+        background-color: var(--input-bg) !important;
+        border-color: #0d6efd !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* Tables */
+    .table {
+        color: var(--text-primary) !important;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: var(--table-hover) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* Navbar - mantiene colori brand ma più scuri */
+    .navbar-dark {
+        background-color: var(--navbar-bg) !important;
+    }
+    
+    /* Dropdown menus */
+    .dropdown-menu {
+        background-color: var(--bg-card) !important;
+        border-color: var(--border-color) !important;
+    }
+    
+    .dropdown-item {
+        color: var(--text-primary) !important;
+    }
+    
+    .dropdown-item:hover {
+        background-color: var(--hover-bg) !important;
+    }
+    
+    /* Badges e alerts - mantengono i loro colori ma più scuri */
+    .badge {
+        filter: brightness(0.8);
+    }
+    
+    .alert {
+        filter: brightness(0.85);
+    }
+    
+    /* Pulsanti - mantengono colori ma più scuri */
+    .btn-primary {
+        filter: brightness(0.9);
+    }
+    
+    .btn-outline-primary {
+        color: #4d94ff !important;
+        border-color: #4d94ff !important;
+    }
+    
+    .btn-outline-primary:hover {
+        background-color: #4d94ff !important;
+        border-color: #4d94ff !important;
+    }
+    
+    /* Text muted */
+    .text-muted {
+        color: var(--text-secondary) !important;
+    }
+    
+    /* Shadows più soft in dark mode */
+    .shadow,
+    .shadow-sm {
+        box-shadow: 0 0.125rem 0.25rem var(--shadow-color) !important;
+    }
+    
+    /* Specifico per alcune pagine */
+    .cliente-card,
+    .articolo-section,
+    .table-container,
+    .filter-card {
+        background-color: var(--bg-card) !important;
+        border-color: var(--border-color) !important;
+    }
+    
+    /* Loading spinners */
+    .spinner-border {
+        filter: brightness(1.5);
+    }
+    
+    /* Code e pre */
+    code {
+        background-color: var(--hover-bg) !important;
+        color: #e06c75 !important;
+    }
+    
+    /* HR */
+    hr {
+        border-color: var(--border-color) !important;
+    }
+    
+    /* Material rows nel preventivo */
+    .material-row {
+        background-color: var(--hover-bg) !important;
+    }
+    
+    /* Statistiche cards - colori adattati */
+    .bg-primary {
+        background-color: #0a58ca !important;
+    }
+    
+    .bg-success {
+        background-color: #157347 !important;
+    }
+    
+    .bg-warning {
+        background-color: #997404 !important;
+    }
+    
+    .bg-danger {
+        background-color: #a71d2a !important;
+    }
+    
+    .bg-info {
+        background-color: #087990 !important;
+    }
+    
+    /* Input group text */
+    .input-group-text {
+        background-color: var(--hover-bg) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* Pagination */
+    .page-link {
+        background-color: var(--bg-card) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    .page-link:hover {
+        background-color: var(--hover-bg) !important;
+    }
+    
+    /* Close button */
+    .btn-close {
+        filter: invert(1) grayscale(100%) brightness(200%);
+    }
+}
+
+/* Transizione smooth quando cambia il tema */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
